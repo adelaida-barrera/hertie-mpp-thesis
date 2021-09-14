@@ -1,0 +1,272 @@
+---
+title: "prueba_natis"
+author: "Adelaida Barrera"
+date: "3/18/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(dplyr)
+library(psych)
+
+load("data/clean_data.Rdata")
+
+```
+
+```{r}
+
+gen <- data %>% select(sm1104a : sm1104h)
+
+Factor <- function(oldvar){
+  gen %>% mutate(var = case_when({{oldvar}} == "respondent alone" ~ 5,
+                             {{oldvar}} == "more respondent than spouse" ~ 4,
+                             {{oldvar}} == "both equally" ~ 3, 
+                             {{oldvar}} == "spouse more than respondent" ~ 2,
+                             {{oldvar}} == "spouse alone" ~ 1, 
+                             {{oldvar}} == "neither of them" ~ 0)) 
+}
+
+
+gen <- Factor(oldvar = sm1104a) %>% rename(a = var)
+gen <- Factor(oldvar = sm1104b) %>% rename(b = var)
+gen <- Factor(oldvar = sm1104c) %>% rename(c = var)
+gen <- Factor(oldvar = sm1104d) %>% rename(d = var)
+gen <- Factor(oldvar = sm1104e) %>% rename(e = var)
+gen <- Factor(oldvar = sm1104f) %>% rename(f = var)
+gen <- Factor(oldvar = sm1104g) %>% rename(g = var)
+gen <- Factor(oldvar = sm1104h) %>% rename(h = var)
+
+gen <- gen %>% select(a:h)
+
+alpha(gen, check.keys=TRUE)
+
+
+```
+
+
+
+```{r}
+
+
+table(data$v149, data$ever_control) %>% prop.table(1) 
+
+table(data$edulev_f, data$ever_control) %>% prop.table(1) 
+table(data$edulev_f, data$ever_emotional) %>% prop.table(1) 
+table(data$edulev_f, data$ever_lesssevere) %>% prop.table(1) 
+table(data$edulev_f, data$ever_severe) %>% prop.table(1) 
+
+table(data$edulev_m, data$ever_control) %>% prop.table(1) 
+table(data$edulev_m, data$ever_emotional) %>% prop.table(1) 
+table(data$edulev_m, data$ever_lesssevere) %>% prop.table(1) 
+table(data$edulev_m, data$ever_severe) %>% prop.table(1) 
+
+table(data$rel_income, data$ever_control) %>% prop.table(1) 
+table(data$rel_income, data$ever_emotional) %>% prop.table(1) 
+table(data$rel_income, data$ever_lesssevere) %>% prop.table(1) 
+table(data$rel_income, data$ever_severe) %>% prop.table(1) 
+
+table(data$rel_level_binary, data$ever_control) %>% prop.table(1) 
+table(data$rel_level_binary, data$ever_emotional) %>% prop.table(1) 
+table(data$rel_level_binary, data$ever_lesssevere) %>% prop.table(1) 
+table(data$rel_level_binary, data$ever_severe) %>% prop.table(1) 
+
+```
+
+```{r}
+
+data_1 <- data %>% 
+  mutate(across(sm1101a : sm1101g, 
+         ~case_when(. == "agrees" ~ 3,
+                   . == "neither agrees nor disagrees" ~ 2,
+                   . == "disagrees" ~ 1)))
+```
+
+```{r}
+
+m_severe_gen <- glm(ever_severe ~ rel_income*exp +                    
+                           edulev_f +  edulev_m +age_f + children_nr + place + wealth_factor, 
+                           family = binomial(link = "logit"),
+                           data = data)
+
+exp(coef(m_severe_gen)) 
+p_severe_gen <-list(summary(m_severe_gen)$coefficients[,4])
+p_severe_gen
+stargazer(m_severe_gen, type = "text")
+
+data$exp <- if_else(data$s1304c == "respondent alone" |
+                      data$s1304c == "more respondent than spouse", 1, 0)
+
+```
+
+
+```{r}
+
+#reg table 
+  stargazer(m_control_res,
+            m_control_res_rel,
+            m_control_gen, 
+            m_control_cul,
+            coef = list(c_control_res, 
+                        c_control_res_rel,
+                        c_control_gen, 
+                        c_control_cul), 
+            type = "text",
+            ci = T, 
+            ci.custom = list(ci_control_res, 
+                             ci_control_res_rel,  
+                             ci_control_gen, 
+                             ci_control_cul),
+            single.row = F, 
+            p= c(p_control_res, 
+                 p_control_res_rel,
+                 p_control_gen, 
+                 p_control_cul), 
+            star.cutoffs = c(0.05, 0.01, 0.001),
+            order = c("rel_income:index_dummy",
+                      "index_dummy",
+                      "rel_income",
+                      "edulev_f",
+                      "edulev_m"),
+            covariate.labels = c("Relative Income:gender attitudes",
+                                 "Traditional gender attitudes",
+                                 "Relative Income", 
+                                 "Woman's education",
+                                 "Man's education", 
+                                 "Woman's age",
+                                 "Afro-Colombian", 
+                                 "Indigenous",
+                                 "Other ethnic minority", 
+                                 "Number of children",
+                                 "Rural households"),
+            column.sep.width = "10pt",
+            dep.var.caption = " ", 
+            dep.var.labels = c("Controlling behaviors (12m)"))
+
+
+```
+
+Texreg regression table example 
+```{r}
+
+
+wordreg(l = list(m_control_res,
+                 m_control_res_rel,
+                 m_lesssev_res,
+                 m_lesssev_res_rel,
+                 m_severe_res,
+                 m_severe_res_rel),
+        stars = c(0.001, 0.01, 0.05),
+        custom.header = list("Controlling behavior" = 1:2, 
+                             "Less severe violence" = 3:4,
+                             "Severe violence" = 5:6),
+        custom.model.names = c("Resource", 
+                               "Relative Resource",
+                               "Resource", 
+                               "Relative Resource",
+                                "Resource", 
+                               "Relative Resource"),
+        custom.coef.names = c("Constant", 
+                              "Woman's education", 
+                              "Man's education", 
+                              "Woman's age", 
+                              "Number of children",
+                              "Afro-Colombian",
+                              "Indigenous", 
+                              "Other ethnic minority",
+                              "Rural households", 
+                              "Poor houseolds"),
+        digits = 2,
+        override.coef = list(c_control_res, 
+                        c_control_res_rel,
+                        c_lesssev_res,
+                        c_lesssev_res_rel, 
+                        c_severe_res,
+                        c_severe_res_rel),
+        padding = 35, 
+        override.pvalues = c(p_control_res, 
+                             p_control_res_rel,
+                             p_lesssev_res,
+                             p_lesssev_res_rel, 
+                             p_severe_res,
+                             p_severe_res_rel),
+        override.se = c(se_control_res,
+                        se_control_res_rel,
+                        se_lesssev_res,
+                        se_lesssev_res_rel,
+                        se_severe_res,
+                        se_severe_res_rel),
+        single.row = TRUE,
+        file = "figures/prueba.doc")
+        
+
+m_control_rel_res %>% tidy() %>% if_else(is.numeric() == T, round)
+
+
+        
+rbind(a, b, c, d, e, f) %>%
+  kableExtra::kable(caption = "Sample sizes",
+                    format = "latex") %>%
+  kableExtra::kable_paper(full_width = F) 
+
+data %>% 
+    mutate(rel_income = if_else(as.numeric(rel_income) == 1, 0, 1)) %>% 
+    summarise(`mean or %` = round(mean(as.numeric(rel_income)), 2)), 
+              sd = round(sd({{x}}), 2),
+              min = min({{x}}), 
+              max = max({{x}}),
+              range = paste0(min, "-" , max)) %>% 
+    select(`mean or %`, sd, range) %>% rbind(descr_tbl, .)
+}
+
+
+data$rel_income %>% as.numeric() %>% table()
+
+```
+
+```{r}
+
+
+data <- data %>% mutate(rel_income_num = as.numeric(rel_income),
+                        rel_income_num = if_else(rel_income_num == 2, 1, 0)) 
+
+data %>% 
+    summarise(`mean or %` = round(mean(rel_years_binary), 2))
+
+              sd = round(sd({{x}}), 2),
+              min = min({{x}}), 
+              max = max({{x}}),
+              range = paste0(min, "-" , max)) %>% 
+    select(`mean or %`, sd, range) %>% rbind(descr_tbl, .)
+}
+
+data <- data %>% mutate(age_diff_factor  = case_when(age_f > age_m ~ 2,
+                                                     age_f == age_m ~ 1,
+                                                     age_f < age_m ~ 0))
+
+prop.table(table(data$rel_years_binary))
+prop.table(table(data$age_diff_factor))
+
+round(prop.table(table(data$rel_income, data$wealth),2),3)
+round(prop.table(table(data$index_dummy, data$wealth),2),3)
+
+
+data %>% ggplot(aes(x = rel))
+
+library(scales)
+scales::viridis(3)
+
+```
+
+```{r}
+
+
+data %>% ggplot(aes(x = wealth)) + geom_histogram()
+```
+
+
+```{r}
+
+prop.table(table(data$children_nr)) 
+
+```
+

@@ -1,0 +1,155 @@
+---
+title: "Adelaida - Results"
+output:
+  html_document:
+    df_print: paged
+    header-includes:
+    - \usepackage[labelformat=empty]{caption}
+---
+
+<br>
+<br>
+
+
+```{r, echo=FALSE, include=FALSE}
+
+library(tidyverse)
+library(corrplot)
+library(ggcorrplot)
+library(broom)
+library(kableExtra)
+load("data/clean_data.Rdata")
+knitr::opts_chunk$set(echo = FALSE, warning = F, message = F,
+                      fig.width = 9, fig.height = 9)
+
+
+```
+
+<br>
+<br>
+
+## Correlation matrix - gender attitudes variables
+
+```{r}
+
+roles <- data %>% 
+  select(c(sm1102a_factor:sm1102g_factor, sm1101a_factor, sm1101e_factor)) %>% 
+  rename(`Men are heads of households` = sm1102a_factor,
+         `Women need men to be happy` = sm1102b_factor,
+         `Men aneed women in hh` = sm1102c_factor,
+         `Families with a man have less problems` = sm1102d_factor,
+         `Abandoning mothers are worse` = sm1102e_factor,
+         `Brides should be virgin` = sm1102f_factor,
+         `Masturbation is for men` = sm1102g_factor,
+         `Role of women is at home` = sm1101a_factor,
+         `Childcare is role of women` = sm1101e_factor)
+
+
+cor_att <- cor(roles, method = "spearman") %>% 
+  ggcorrplot(p.mat = cor_pmat(roles), 
+             type='lower',
+             lab = TRUE, digits = 2,
+             legend.title = expression(rho),
+             title = "Spearman's correlation matrix of variables on attitudes on gender \n \n")
+    
+save(file = "figures/corr_att", cor_att)
+
+```
+
+<br>
+<br>
+```{r}
+
+dependent <- data %>% 
+  select(c(d101a : d101i, #control
+           d105a : d105g, )) %>%  # physical violence
+  mutate(across(everything(),
+                .fns = ~if_else(. == "yes, last year", 1, 0))) %>% 
+  rename(`Gets jealous if she talks to men` = d101a,
+         `Calls her unfaithful` = d101b,
+         `Prohibits her to see friends` = d101c,
+         `Prohibits her to see family` = d101d,
+         `Controls her location` = d101e,
+         `Mistrusts her w/ money` = d101f,
+         `Ignores her` = d101g,
+         `Ingnores her opinion on gatherings` = d101h,
+         `Ingnores her opinion on decisions` = d101i,
+         `Pushed, shook or thrown objects at her`= d105a,
+         `Slapped her`= d105b,
+         `Punched or hit her with harmful object`= d105c,
+         `Kicked or dragged her`= d105d,
+         `Strangled or burnt her`= d105e,
+         `Threatened her with knife or weapon`= d105f,
+         `Attacked her with knife or weapon`= d105g)
+
+cor_violence <- cor(dependent, method = "spearman") %>% 
+  ggcorrplot(p.mat = cor_pmat(dependent), 
+             type='lower',
+             lab = TRUE, digits = 2,
+             legend.title = expression(rho),
+             title = "Spearman's correlation matrix of violence variables \n \n")
+
+save(cor_violence, file = "figures/corr_violence")
+
+```
+<br>
+<br>
+
+```{r,}
+
+dependent_ever <- data %>% select(ever_control, 
+                                  ever_lesssevere,
+                                  ever_severe) %>% 
+  rename(`Less severe violence (12m)` = ever_lesssevere,
+         `Severe violence (12m)` = ever_severe,
+         `Controlling behaviors (12m)` = ever_control)
+
+
+cor_dep <- cor(dependent_ever, method = "spearman") %>% 
+  as.data.frame() %>% 
+  rownames_to_column(var = " ") %>% 
+  filter(` ` != "Severe violence (12m)") %>% 
+  select(-"Controlling behaviors (12m)") %>% 
+  kbl(caption = "Spearman's correlation matrix of dependent variables",
+      format = "latex",) %>% 
+  kable_classic_2(latex_options =c("scale_down")) 
+
+kable_as_image(cor_dep, filename =  "figures/cor_dep", file_format = "png")
+
+```
+
+# Correlation matrix - control variables 
+
+```{r}
+
+controls <- data %>% 
+  select(age_f, 
+         edulev_m,
+         edulev_f,
+         ethnicity,
+         rural_dummy,
+         children_nr, 
+         wealth) %>% 
+  mutate(`Afrocolombian` = if_else(ethnicity == "Afro-colombian", 1, 0),
+         Indigenous = if_else(ethnicity == "Indigenous", 1, 0),
+         `Other minorities` = if_else(ethnicity == "Other minorities", 1, 0)) %>%
+  rename(Rural = rural_dummy,
+         `Number of children` = children_nr,
+         `Age of woman` = age_f,
+         `Education level of woman` = edulev_f,
+         `Education level of man` = edulev_m,
+         `Wealth (excluded)` = wealth) %>% 
+  select(-ethnicity)
+
+cor_controls <- cor(controls, method = "spearman") %>%
+  ggcorrplot(p.mat = cor_pmat(controls), 
+             hc.order=TRUE, 
+             legend.title = expression(rho),
+             type='lower', 
+             lab = TRUE,
+             title = "Spearman's correlation matrix of controlling variables \n \n")
+
+save(file = "figures/cor_controls", cor_controls)
+```
+
+

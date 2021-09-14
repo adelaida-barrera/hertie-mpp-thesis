@@ -1,0 +1,445 @@
+---
+title: "descriptives"
+author: "Adelaida Barrera"
+date: "3/7/2021"
+output: html_document
+---
+
+```{r, include = FALSE}
+
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+library(tidyverse)
+library(summarytools)
+library(kableExtra)
+load("data/clean_data.Rdata")
+
+```
+
+
+```{r}
+variables <- c("Experienced control by male partner (percentage)", 
+               "Experienced emotional violence by male partner (percentage)", 
+               "Experienced less severe phyiscal violence by male partner (percentage)",
+               "Experienced severe physical violence by male partner (percentage)",
+               "Years of education (women)", 
+               "Years of education (men)",
+               "Female has higher education level than male (percentage)",
+               "Female has more years of eucation than male (percentage)",
+               "Difference in years of education betwen female and male",
+               "Female earns more money than male (percentage)", 
+               "Age (women)", 
+               "Age (men)",
+               "Number of children born (women)",
+               "Wealth index: 'poorest' or 'poor (percentage)",
+               "Wealth index: 'middle' (percentage)",
+               "Wealth index: 'rich' or 'richest (percentage)",
+               "Afro-colombians (percentage)", 
+               "Indigenous people (percentage)",
+               "Other minorities (percentage)", 
+               "Non-minorities (percentage)", 
+               "Urban households (percentage)", 
+               "Rural households (percentage)")
+
+# Function to crete rows of descriptives table 
+
+Create_row <- function(x, data){data %>% 
+    summarise(mean = round(mean({{x}}), 2), 
+              sd = round(sd({{x}}), 2),
+              min = min({{x}}), 
+              max = max({{x}}),
+              range = paste0(min, "-" , max)) %>% 
+    select(mean, sd, range) %>% rbind(descr_tbl, .)
+}
+
+mean <- c()
+sd <- c()
+range <- c()
+
+descr_tbl <- tibble(mean, sd, range)
+
+descr_tbl <- Create_row(x = ever_control, data)
+descr_tbl <- Create_row(x = ever_emotional, data)
+descr_tbl <- Create_row(x = ever_lesssevere, data)
+descr_tbl <- Create_row(x = ever_severe, data)
+
+descr_tbl <- Create_row(x = eduyear_f, data)
+descr_tbl <- Create_row(x = eduyear_m, data)
+
+descr_tbl <- Create_row(x = rel_level_binary, data)
+descr_tbl <- Create_row(x = rel_years_binary, data)
+descr_tbl <- Create_row(x = diff_years, data)
+
+data_trim <- data %>% select(rel_income) %>% drop_na() 
+descr_tbl <- Create_row(x = rel_income, data_trim)
+
+descr_tbl <- Create_row(x = v012, data) # female respondents' age 
+
+descr_tbl <- Create_row(x = mv012, data) # male respondents' age
+
+descr_tbl <- Create_row(x = v201, data) # children ever born 
+
+descr_tbl <- Create_row(x = poor_dummy, data) # wealth index:
+descr_tbl <- Create_row(x = middle_dummy, data)
+descr_tbl <- Create_row(x = rich_dummy, data)
+
+descr_tbl <- Create_row(x = afro_dummy, data) 
+descr_tbl <- Create_row(x = indigenous_dummy, data) 
+descr_tbl <- Create_row(x = minorities_dummy, data) 
+descr_tbl <- Create_row(x = mestizo_dummy, data) 
+
+descr_tbl <- Create_row(x = urban_dummy, data) 
+descr_tbl <- Create_row(x = rural_dummy, data) 
+
+descr_tbl <- descr_tbl %>% mutate(Variable = variables) %>% relocate(Variable)
+
+descr_tbl <- descr_tbl %>% mutate()
+
+descr_tbl_prnt <- descr_tbl %>% 
+  kbl(caption = "Desrciptive statistics for all relevant variables",
+      format = "latex") %>% 
+  kable_classic_2(latex_options =c("scale_down")) %>% 
+  pack_rows("Violence", 1,4) %>% 
+  pack_rows("Education", 5, 8) %>% 
+  pack_rows("Relative empowerment", 9, 12) %>% 
+  pack_rows("Other", 13, 15) 
+
+
+kable_as_image(descr_tbl_prnt, filename =  "Table.2", file_format = "png")
+
+descr_tbl
+
+rm(mean, sd, range, variables, )
+
+```
+```{r}
+
+
+level_plot <- data %>% 
+  select(v002, factor_edulev_f, factor_edulev_m)  %>%
+  pivot_longer(cols = c(factor_edulev_f, factor_edulev_m),
+               names_to = "gender", 
+               values_to = "edu_level") %>% 
+  group_by(gender, edu_level) %>% 
+  summarize(frequency = n()) %>% 
+  mutate(`%` = (round(frequency/sum(frequency), 2)),
+         gender = if_else(gender == "factor_edulev_f", "Women", "Men")) %>% 
+  #   edu_level = case_when(edu_level == "1-less than primary" ~ "Less than primary",
+  #                        edu_level == "2-primary" ~ "Primary",
+  #                       edu_level == "3-secondary" ~ "Secondary",
+  #                      edu_level == "4-higher" ~ "Higher education")) %>% 
+  ggplot(aes(x = gender,
+             y = `%`,
+             fill = edu_level, 
+             label = `%`)) +
+  geom_col(position = "dodge") + 
+  geom_text(position = position_dodge(width = 0.9),  vjust = -1,
+            size = 4) +
+  theme_minimal()  +
+  scale_fill_ordinal() +
+  scale_y_continuous(limits = c(0, 0.5)) +
+  labs(title = "Figure 1. Educational attainment distribution by gender \n",
+       x = "",
+       y = "%",
+       fill = "Education Level") +
+  theme(legend.position = "bottom")
+
+
+level_plot 
+```
+
+```{r edu_diff_plot, fig.height=5, fig.width=7}
+
+data %>% 
+  summarize(edu_average = ((eduyear_f + eduyear_m)/2),
+            diff_edu = eduyear_m - eduyear_f,
+            factor_diff_edu = 
+              case_when(diff_edu > 1 ~ "3- Man is more educated",
+                        diff_edu == 0 ~ "2- Education is the same",
+                        diff_edu < 1 ~ "1- Woman is more educated")) %>% 
+  na.omit() %>% 
+  ggplot(aes(x = diff_edu,
+             fill = factor_diff_edu)) + 
+  geom_histogram(binwidth = 1.8) +
+  theme_minimal() +
+  labs(title = "Figure 2. Distribution of education gap in couples",
+       y = "Count",
+       x = "Education difference in years (Men - Women)",
+       fill = "") +
+  scale_fill_ordinal(begin = 0.1, end = 0.8) + 
+    theme(legend.position = "bottom")
+
+
+```
+
+```{r age_plot, fig.height=4, fig.width=7}
+
+age_plot <- data %>% 
+  select(v002, age_f, age_m)  %>%
+  pivot_longer(cols = c(age_f, age_m),
+               names_to = "gender", 
+               values_to = "age") %>% 
+  mutate(gender = if_else(gender == "age_f", "Women", "Men")) %>% 
+  ggplot(aes(x = age,
+             fill = gender)) +
+  geom_density(alpha = 0.6, size = 0) + 
+  theme_minimal()  +
+  scale_fill_ordinal() +
+  labs(title = "Age distribution by gender \n",
+       x = "Age (years)",
+       y = "Density",
+       fill = "Gender") + 
+    theme(legend.position = "bottom") 
+  
+
+age_plot
+
+```
+
+```{r age_diff_plot, fig.height=4, fig.width=7,}
+
+data %>% 
+  summarize(age_average = ((age_m + age_f)/2),
+            diff_age = age_m - age_f,
+            factor_diff_age = 
+              case_when(diff_age > 1 ~ "3-Man is older",
+                        diff_age == 0 ~ "2-Same age",
+                        diff_age < 1 ~ "1-Woman is older")) %>% 
+  na.omit() %>% 
+  ggplot(aes(x = diff_age,
+             fill = factor_diff_age)) + 
+  geom_histogram(binwidth = 1.9) +
+  theme_minimal() +
+  labs(title = "Figure 3. Distribution of age gap within couples",
+       y = "Count",
+       x = "Age difference in years (Man - Woman)",
+       fill = "") +
+  scale_fill_ordinal(direction = 1, begin = 0.1, end = 0.8) +
+  scale_y_continuous(limits = c(0,2000)) + 
+    theme(legend.position = "bottom")
+
+```
+
+```{r wealth_bw_plot, fig.height = 5, fig.width = 8}
+
+
+# Wealth and female bread winners
+
+data %>% 
+  select(v002, wealth_factor, rel_income, index_dummy) %>%
+  group_by(wealth_factor, rel_income) %>% 
+  summarize(frequency = n()) %>% 
+  mutate(`%` = (round(frequency/sum(frequency), 2)),
+         bw = if_else(rel_income == 1, "Female breadwinner", "Not female breadwinner"),
+         wealth_factor = case_when(wealth_factor == "poorest" ~ "1-poorest",
+                                   wealth_factor == "poorer" ~ "2-poor",
+                                   wealth_factor == "middle" ~ "3-middle",
+                                   wealth_factor == "richer" ~ "4-rich",
+                                   wealth_factor == "richest" ~ "5-richest")) %>% 
+  #   edu_level = case_when(edu_level == "1-less than primary" ~ "Less than primary",
+  #                        edu_level == "2-primary" ~ "Primary",
+  #                       edu_level == "3-secondary" ~ "Secondary",
+  #                      edu_level == "4-higher" ~ "Higher education")) %>% 
+  ggplot(aes(x = wealth_factor,
+             y = `%`,
+             fill = bw, 
+             label = `%`)) +
+  geom_col() + 
+  scale_fill_ordinal(begin = 0.2, end = 0.8) +
+  theme_minimal()  +
+  scale_y_continuous(limits = c(0, 0.2)) +
+  labs(title = "Proportion of female breadwinners by level of household wealth \n",
+       x = "",
+       y = "% of female breadwinners \n",
+       fill = "") +
+  geom_text(  vjust = -1,
+            size = 4) +
+  theme(legend.position = "none")
+
+```
+
+```{r wealth_trad_plot, fig.height = 5, fig.width = 8}
+
+# Wealth and traditional gender views 
+
+data %>% 
+  select(v002, wealth_factor, rel_income, index_dummy) %>%
+  group_by(wealth_factor, index_dummy) %>% 
+  summarize(frequency = n()) %>% 
+  mutate(`%` = (round(frequency/sum(frequency), 2)),
+         bw = if_else(index_dummy == 1, "Very traditional man", "Not very traditional man"),
+         wealth_factor = case_when(wealth_factor == "poorest" ~ "1-poorest",
+                                   wealth_factor == "poorer" ~ "2-poor",
+                                   wealth_factor == "middle" ~ "3-middle",
+                                   wealth_factor == "richer" ~ "4-rich",
+                                   wealth_factor == "richest" ~ "5-richest")) %>% 
+  #   edu_level = case_when(edu_level == "1-less than primary" ~ "Less than primary",
+  #                        edu_level == "2-primary" ~ "Primary",
+  #                       edu_level == "3-secondary" ~ "Secondary",
+  #                      edu_level == "4-higher" ~ "Higher education")) %>% 
+  ggplot(aes(x = wealth_factor,
+             y = `%`,
+             fill = bw, 
+             label = `%`)) +
+  geom_col() + 
+  scale_fill_ordinal(begin = 0.2, end = 0.8, direction = -1) +
+  theme_minimal()  +
+  scale_y_continuous(limits = c(0, 0.2)) +
+  labs(title = "Proportion of very traditional male partners by level of household wealth \n",
+       x = "",
+       y = "% of very traditional men \n",
+       fill = "") +
+  geom_text(  vjust = -1,
+            size = 4) +
+  theme(legend.position = "none")
+
+```
+
+```
+
+```{r}
+
+cross_edulev <- 
+  prop.table(table(data$ever_control, data$factor_edulev_f), 2) %>% 
+  as.data.frame() %>% arrange(Var2) %>% 
+  pivot_wider(names_from = Var1, values_from = Freq) %>% 
+  mutate(`Controlling behaviors` = round(`1`*100, 1)
+        # ,`Did not experience control` = round(`0`*100, 1)
+        ) %>% select(c(1,4)) %>% 
+  
+  left_join(prop.table(table(data$ever_emotional, data$factor_edulev_f), 2) %>%
+  as.data.frame() %>% arrange(Var2) %>%
+  pivot_wider(names_from = Var1, values_from = Freq) %>% 
+  mutate(`Emotional violence` = round(`1`*100, 1)
+         #,`Did not experience emotional violence` = round(`0`*100, 1)
+         ) %>% select(c(1,4)), by = "Var2") %>% 
+  
+  left_join(prop.table(table(data$ever_lesssevere, data$factor_edulev_f), 2) %>%
+  as.data.frame() %>% arrange(Var2) %>%
+  pivot_wider(names_from = Var1, values_from = Freq) %>% 
+  mutate(`Less severe violence` = round(`1`*100, 1)
+         #,`Did not experience less severe v` = round(`0`*100, 1)
+         ) %>% select(c(1,4)), by = "Var2") %>% 
+  
+  left_join(prop.table(table(data$ever_severe, data$factor_edulev_f), 2) %>%
+  as.data.frame() %>% arrange(Var2) %>%
+  pivot_wider(names_from = Var1, values_from = Freq) %>% 
+  mutate(`Severe violence` = round(`1`*100, 1)
+         #,`Did not experience severe v` = round(`0`*100, 1)
+         ) %>% select(c(1,4)), by = "Var2") 
+  
+cross_bw <- 
+  prop.table(table(data$ever_control, data$rel_income), 2) %>% 
+  as.data.frame() %>% arrange(Var2) %>% 
+  pivot_wider(names_from = Var1, values_from = Freq) %>% 
+  mutate(`Controlling behaviors` = round(`1`*100, 1)
+        # ,`Did not experience control` = round(`0`*100, 1)
+        ) %>% select(c(1,4)) %>%
+  
+  left_join(prop.table(table(data$ever_emotional, data$rel_income), 2) %>%
+  as.data.frame() %>% arrange(Var2) %>%
+  pivot_wider(names_from = Var1, values_from = Freq) %>% 
+  mutate(`Emotional violence` = round(`1`*100, 1)
+         #,`Did not experience less severe v` = round(`0`*100, 1)
+         ) %>% select(c(1,4)), by = "Var2") %>% 
+  
+  left_join(prop.table(table(data$ever_lesssevere, data$rel_income), 2) %>%
+  as.data.frame() %>% arrange(Var2) %>%
+  pivot_wider(names_from = Var1, values_from = Freq) %>% 
+  mutate(`Less severe violence` = round(`1`*100, 1)
+         #,`Did not experience less severe v` = round(`0`*100, 1)
+         ) %>% select(c(1,4)), by = "Var2") %>% 
+  
+  left_join(prop.table(table(data$ever_severe, data$rel_income), 2) %>%
+  as.data.frame() %>% arrange(Var2) %>%
+  pivot_wider(names_from = Var1, values_from = Freq) %>% 
+  mutate(`Severe violence` = round(`1`*100, 1)
+         #,`Did not experience less severe v` = round(`0`*100, 1)
+         ) %>% select(c(1,4)), by = "Var2")
+
+cross_wealth <- 
+  prop.table(table(data$ever_control, data$wealth), 2) %>% 
+  as.data.frame() %>% arrange(Var2) %>% 
+  pivot_wider(names_from = Var1, values_from = Freq) %>% 
+  mutate(`Controlling behaviors` = round(`1`*100, 1)
+        # ,`Did not experience control` = round(`0`*100, 1)
+        ) %>% select(c(1,4)) %>%
+  
+    left_join(prop.table(table(data$ever_emotional, data$wealth), 2) %>%
+  as.data.frame() %>% arrange(Var2) %>%
+  pivot_wider(names_from = Var1, values_from = Freq) %>% 
+  mutate(`Emotional violence` = round(`1`*100, 1)
+         #,`Did not experience less severe v` = round(`0`*100, 1)
+         ) %>% select(c(1,4)), by = "Var2") %>% 
+  
+  left_join(prop.table(table(data$ever_lesssevere, data$wealth), 2) %>%
+  as.data.frame() %>% arrange(Var2) %>%
+  pivot_wider(names_from = Var1, values_from = Freq) %>% 
+  mutate(`Less severe violence` = round(`1`*100, 1)
+         #,`Did not experience less severe v` = round(`0`*100, 1)
+         ) %>% select(c(1,4)), by = "Var2") %>% 
+  
+  left_join(prop.table(table(data$ever_severe, data$wealth), 2) %>%
+  as.data.frame() %>% arrange(Var2) %>%
+  pivot_wider(names_from = Var1, values_from = Freq) %>% 
+  mutate(`Severe violence` = round(`1`*100, 1)
+         #,`Did not experience less severe v` = round(`0`*100, 1)
+         ) %>% select(c(1,4)), by = "Var2")
+
+cross_att <- 
+  prop.table(table(data$ever_control, data$index_dummy), 2) %>% 
+  as.data.frame() %>% arrange(Var2) %>% 
+  pivot_wider(names_from = Var1, values_from = Freq) %>% 
+  mutate(`Controlling behaviors` = round(`1`*100, 1)
+        # ,`Did not experience control` = round(`0`*100, 1)
+        ) %>% select(c(1,4)) %>%
+  
+   left_join(prop.table(table(data$ever_emotional, data$index_dummy), 2) %>%
+  as.data.frame() %>% arrange(Var2) %>%
+  pivot_wider(names_from = Var1, values_from = Freq) %>% 
+  mutate(`Emotional violence` = round(`1`*100, 1)
+         #,`Did not experience less severe v` = round(`0`*100, 1)
+         ) %>% select(c(1,4)), by = "Var2") %>% 
+  
+  left_join(prop.table(table(data$ever_lesssevere, data$index_dummy), 2) %>%
+  as.data.frame() %>% arrange(Var2) %>%
+  pivot_wider(names_from = Var1, values_from = Freq) %>% 
+  mutate(`Less severe violence` = round(`1`*100, 1)
+         #,`Did not experience less severe v` = round(`0`*100, 1)
+         ) %>% select(c(1,4)), by = "Var2") %>% 
+  
+  left_join(prop.table(table(data$ever_severe, data$index_dummy), 2) %>%
+  as.data.frame() %>% arrange(Var2) %>%
+  pivot_wider(names_from = Var1, values_from = Freq) %>% 
+  mutate(`Severe violence` = round(`1`*100, 1)
+         #,`Did not experience less severe v` = round(`0`*100, 1)
+         ) %>% select(c(1,4)), by = "Var2")
+
+
+ind_variables <- c("Less than primary",
+                   "Primary",
+                   "Secondary",
+                   "Higher education",
+                   "Woman does not earn more than man",
+                   "Woman earns more than man",
+                   "Not very traditional male partner (bottom 90%)",
+                   "Very traditional male partner (top 10%)")
+
+cross_table <- 
+  rbind(cross_edulev,
+        cross_bw,
+        cross_wealth,
+        cross_att) %>% 
+  mutate(Subgroup = ind_variables) %>% relocate(Subgroup)  %>%  select(-Var2) %>% 
+  kableExtra::kbl(caption = "Cross tabulation between dependent and independent variables* (percentage of women who have experienced violence in last 12 months)",
+   #   format = "latex",
+      align = "lrrrr") %>% 
+  kableExtra::kable_classic_2(latex_options =c("scale_down")) %>%
+  kableExtra::pack_rows("Female education level", 1,4) %>% 
+  kableExtra::pack_rows("Female breadwinners", 5, 6) %>% 
+  kableExtra::pack_rows("Wealth", 7, 11) %>% 
+  kableExtra::pack_rows("Traditional gender attitudes", 12, 13) %>% 
+  kableExtra::add_footnote(c("Wealth is not included as an independent variable in the logistic regression models but it is added here for reference"), notation = "symbol")
+
+cross_table
+
+```

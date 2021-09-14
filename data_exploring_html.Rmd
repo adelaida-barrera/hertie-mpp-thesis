@@ -1,0 +1,795 @@
+---
+title: "Partner violence, economic empowerment and Gender norms in Colombia"
+author: "Adelaida Barrera"
+output: 
+  html_document:
+    highlight: tango
+    theme: journal
+    code_folding: hide
+  
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+
+library(tidyverse)
+library(summarytools)
+library(kableExtra)
+
+# Load couples' recode recode
+load("data/COCR71FL.Rdata")
+
+# Load full womens recode
+load("data/COIR72FL.Rdata") 
+
+# Load cleaned data 
+load("data/clean_data.Rdata")
+
+```
+
+```{r select, echo = FALSE}
+
+# Selecting relevant variables from the DHS' couples' recode
+
+cr_02 <- 
+  CR_2015 %>%
+  select(
+# Women's variables
+    # ID 
+    v002, # household number
+    v003, # line number
+    v034, # line of husband's number
+    v044, # selected for DV module
+    v501: v502, # marital status 
+    s606, #number of unions
+    s607n_1 : s607n_2, # Order of union
+    s607y_1 : s607y_5, # Year union started
+    v012, # current age
+    v102, # De facto type of place of residence
+    v201, # number of children ever born
+    
+    # Economic
+    s106a, # education level
+    s106b, # Grade of school completed
+    v133, # Education in single years 
+    v149, # Educational attainment
+    v511, # Age at first cohabitation 
+    v131, # Ethnicity 
+    v190, # Wealth index
+    v190a, # Wealth index for urban/rural
+    v745a : v745b, #property ownership
+    s815b : s815c, #property ownership
+    v746, # Relative income
+    s813, # Share of hh expenses paid by her
+    v714, # employment status
+    v731, # worked in the last 12 months 
+    v741, # type of earnings
+    v739, # autonomy over income 
+    v743a : v743f, # decision making power
+    
+    #Violence
+    d101a : d101i, # controlling behaviors
+    d102, # number of controlling behaviors
+    d103c  : d103e, # emotional violence
+    d105a : d105g, # physical violence
+    d106, # ever less severe violence
+    d107, # ever severe violence
+    d105h, # rape
+    s1205b : s1205e, # economic violence 
+    d101f, # economic violence 
+    s1217, # consider leaving partner
+    s1218, # reasons for wanting to separate
+    d121, # father of respondent beat wife
+    s1226,  # father of partner beat wife 
+    
+# Cultural 
+
+    s1274a : s1274i, # beliefs on violence
+    v744a : v744e, # justifications for wife beating 
+    v633a : v633e, # justifications for refusing sex
+    s1301a : s1301l, # beliefs on gender 
+    s1302a : s1302h, # beliefs on gender (2)
+    s1304a : s1304h, # home care gender roles
+
+# Corresponding mens' variables in couples' recode    
+    sm506,
+    sm507n_1 : sm507n_5,
+    sm507y_1 : sm507y_5,
+    mv003,
+    mv739,
+    mv743a : mv743f,
+    sm1054a: sm1054i,
+    mv744a : mv744e,
+    mv633a : mv633d,
+    sm1101a : sm1101l,
+    sm1102a : sm1102h,
+    sm1104a : sm1104h,
+    sm106a,
+    sm106b,
+    mv133,
+    mv149,
+    mv745a : mv745b , 
+    sm716b , sm716c,
+    mv745a,
+    mv745b,
+    sm716b,
+    sm716c,
+    mv190,
+    mv190,
+    mv714,
+    mv731,
+    mv741,
+    sm713,
+    mv012,
+    mv511,
+    mv102,
+    mv201)
+
+# save(file = "data/cr_02.RData", cr_02)
+```
+<br>
+<br>
+
+## Sample sizes 
+
+```{r analytical_sample}
+# Full sample of women 
+a <- IR_2015 %>% summarise(Sample = "All women interviewed", 
+                         n = n()) 
+
+# Women interviewed for domestic violence module 
+b <- IR_2015 %>% 
+  filter(v044 == "woman selected and interviewed") %>% 
+  summarise(Sample = "Women selected for domestic violence module",  n = n())
+  
+# Women currently married or living with partner 
+c <- IR_2015 %>% 
+  filter(v044 == "woman selected and interviewed" &
+           v502 == "currently in union/living with a man") %>%
+  summarise(Sample = "Women currently married or living with partner", n = n()) 
+
+# number of valid pair observations
+
+load("data/cr_02.RData")
+
+d <- cr_02 %>% summarise(Sample = "Valid couple cases", n = n())
+
+# number of couples living together since at least 2014 
+
+cr_02_01 <- cr_02 %>% 
+  mutate(union_last12m = if_else(s607y_1 > 2013 |
+                                   s607y_2 > 2013 |
+                                   s607y_3 > 2013 |
+                                   s607y_4 > 2013 |
+                                   s607y_5 > 2013, 
+                                 true = 1, 
+                                 false = 0,
+                                 missing = 0)) %>% 
+  filter(union_last12m == 0)
+
+e <- cr_02_01 %>% 
+  summarise(Sample = "Valid couples that moved together before 2014" , n = n())
+
+# Number of couples after eliminating NA's in DV questions
+f <- cr_02_01 %>% 
+  filter(is.na(d103c) == F) %>% 
+  summarise(Sample = "Number of couples after eliminating missing observations", 
+            n = n())
+
+samples_tbl <- rbind(a, b, c, d, e, f) %>%
+  kableExtra::kable(caption = "Sample sizes", format = "latex") %>%
+  kableExtra::kable_classic_2(full_width = T) 
+
+kable_as_image(samples_tbl, filename =  "Table.1", file_format = "png", keep_pdf = F, density = 300)
+
+rm(a ,b, c, d, e, f, g)
+
+# Creating analytical sample by subsetting the couples' recode to only include couples living together at least since 2014. 
+
+cr_03 <- cr_02 %>% 
+  mutate(union_last12m = if_else(s607y_1 > 2013 |
+                                   s607y_2 > 2013 |
+                                   s607y_3 > 2013 |
+                                   s607y_4 > 2013 |
+                                   s607y_5 > 2013, 
+                                 true = 1, 
+                                 false = 0,
+                                 missing = 0)) %>% 
+  filter(union_last12m == 0)
+
+```
+
+<br>
+<br>
+
+# Frequency tables by specific behaviors
+
+```{r frequencies_control}
+# Function to get frequencies in percentage form
+
+Freq <- function(x, table){
+  cr_03 %>% group_by({{x}}) %>% summarize(n = n()) %>% 
+  mutate(`%` = (round(n/sum(n)*100, 1))) %>% 
+  rename(Variable = {{x}}) %>% 
+  select(-n) %>% 
+  pivot_wider(names_from = Variable, values_from = `%`) %>%
+    rbind(table,.)} 
+
+# Create an empty tibble to put all freq 
+Question <-  c()
+no <- c()
+`yes, before last year` <- c()
+`yes, last year` <- c()
+`NA` <- c()
+
+v_table <- tibble(no, `yes, before last year`, `yes, last year`,`NA`)
+  
+control_tbl <- Freq(d101a, v_table) 
+control_tbl <- Freq(d101b, control_tbl) 
+control_tbl <- Freq(d101c, control_tbl)
+control_tbl <- Freq(d101d, control_tbl)
+control_tbl <- Freq(d101e, control_tbl)
+control_tbl <- Freq(d101f, control_tbl)
+control_tbl <- Freq(d101g, control_tbl)
+control_tbl <- Freq(d101h, control_tbl)
+control_tbl <- Freq(d101i, control_tbl)
+
+controlling_labels <- label(select(cr_03, d101a:d101i), all = T) %>% as.character()
+
+control_tbl <- control_tbl %>% mutate(Behavior = str_remove(controlling_labels, "Husband/partner")) %>%
+mutate(Yes = `yes, last year`, 
+       No = `yes, before last year` + `no`, 
+       na = `NA`) %>% 
+select(Behavior, Yes, No, na) %>% 
+  arrange(desc(Yes))
+
+control_tbl %>% kable(caption = "Distribution of controlling behaviors in past 12 months (Percentage)") %>% kable_classic_2(font_size = 18)
+
+```
+
+```{r frequencies_emotional}
+
+# Variable d103d was coded "never" instead of "no". Changing it to match the other questions on violence 
+cr_03 <- cr_03 %>% 
+  mutate(d103d_1 = if_else(d103d == "never", "no", d103d)) 
+
+emo_tbl <- Freq(d103c, v_table)
+emo_tbl <- Freq(d103d_1, emo_tbl)
+emo_tbl <- Freq(d103e, emo_tbl)
+
+emotional_labels <- label(select(cr_03, d103c  : d103e), all = T) %>% as.character()
+
+emo_tbl <- emo_tbl %>% mutate(Behavior = emotional_labels) %>%
+mutate(Yes = `yes, last year`, 
+       No = `yes, before last year` + `no`, 
+       na = `NA`) %>% 
+select(Behavior, Yes, No, na) %>% 
+  arrange(desc(Yes))
+
+emo_tbl %>% kable(caption = "Distribution of emotional violence in past 12 months (Percentage)") %>% kable_classic_2(font_size = 18)
+
+```
+
+```{r frequencies_physical}
+
+# Physical violence varaibles: d105a : d105g
+
+phys_tbl <- Freq(d105a, v_table)
+phys_tbl <- Freq(d105b, phys_tbl)
+phys_tbl <- Freq(d105c, phys_tbl)
+phys_tbl <- Freq(d105d, phys_tbl)
+phys_tbl <- Freq(d105e, phys_tbl)
+phys_tbl <- Freq(d105f, phys_tbl)
+phys_tbl <- Freq(d105g, phys_tbl)
+
+phys_labels <- label(select(cr_03, d105a : d105g), all = T) %>% as.character()
+
+phys_tbl <- phys_tbl %>% mutate(Behavior = phys_labels) %>%
+mutate(Yes = `yes, last year`, 
+       No = `yes, before last year` + `never`, 
+       na = `NA`) %>% 
+select(Behavior, Yes, No, na) %>% 
+  arrange(desc(Yes))
+
+phys_tbl %>% kable(caption = "Distribution of physical violence in past 12 months (Percentage)") %>% kable_classic_2(full_width = T, font_size = 18)
+
+```
+
+```{r frequencies_economic}
+
+# Economic violence varaibles: s1205b : s1205e
+
+econ_tbl <- Freq(s1205b, v_table)
+econ_tbl <- Freq(s1205c, econ_tbl)
+econ_tbl <- Freq(s1205d, econ_tbl)
+econ_tbl <- Freq(s1205e, econ_tbl)
+
+econ_labels <- label(select(cr_03, s1205b : s1205e), all = T) %>% as.character()
+
+econ_tbl <- econ_tbl %>% mutate(Behavior = econ_labels) %>%
+mutate(Yes = `yes, last year`, 
+       No = `yes, before last year` + `no`, 
+       na = `NA`) %>% 
+select(Behavior, Yes, No, na) %>% 
+  arrange(desc(Yes))
+
+econ_tbl %>% kable(caption = "Distribution of economic violence in past 12 months (Percentage)") %>% kable_classic_2(full_width = T, font_size = 18)
+
+
+```
+
+```{r violence_summary_fullsample}
+
+#    d101a : d101i, # controlling behaviors
+#    d102, # number of controlling behaviors
+#    d103c  : d103e, # emotional violence
+#    d105a : d105g, # physical violence
+#    d106, # ever less severe violence
+#    d107, # ever severe violence
+#    d105h, # rape
+#    s1205b : s1205e) # economic violence 
+
+
+# creating dummy variables of emotional violence
+cr_03 <- cr_03 %>% mutate(d103c_binary = (if_else(d103c == "yes, last year", 1, 0)),
+                          d103d_binary = if_else(d103d == "yes, last year", 1, 0),
+                          d103e_binary = if_else(d103e == "yes, last year", 1, 0))
+
+cr_03 <- cr_03 %>%  mutate(number_control = d102,
+                         ever_control = if_else(d102 >= 1, 1, 0),
+                         number_emotional = d103c_binary + d103d_binary + d103e_binary,
+                         ever_emotional = if_else(number_emotional >= 1, 1, 0),
+                         ever_lesssevere = if_else(d106 == "no", 0, 1),
+                         ever_severe = if_else(d107 == "no", 0, 1))
+  
+cr_v <- cr_03 %>% select(ever_control, ever_emotional, ever_lesssevere, ever_severe) %>% 
+  drop_na()
+
+# save(file = "data/cr_03.Rdata", cr_03)
+
+control <- cr_v %>% group_by(ever_control) %>% summarise(n = n()) %>% 
+  mutate(`%` = (round(n/sum(n)*100, 1))) %>% 
+  pivot_wider(names_from = ever_control, values_from = c(n, `%`)) %>% 
+  mutate(Variable = 'Ever control') 
+
+emotional <- cr_v %>% group_by(ever_emotional) %>% summarise(n = n()) %>% 
+  mutate(`%` = (round(n/sum(n)*100, 1))) %>% 
+  pivot_wider(names_from = ever_emotional, values_from = c(n, `%`)) %>% 
+  mutate(Variable = 'Ever emotional')  
+  
+less_s <-  cr_v %>% group_by(ever_lesssevere) %>% summarise(n = n()) %>% 
+  mutate(`%` = (round(n/sum(n)*100, 1))) %>% 
+  pivot_wider(names_from = ever_lesssevere, values_from = c(n, `%`)) %>% 
+  mutate(Variable = 'Ever less severe physical')  
+
+severe <- cr_v %>% group_by(ever_severe) %>% summarise(n = n()) %>% 
+  mutate(`%` = (round(n/sum(n)*100, 1))) %>% 
+  pivot_wider(names_from = ever_severe, values_from = c(n, `%`)) %>% 
+  mutate(Variable = 'Ever severe physical')  
+  
+  
+viol_tbl <- rbind(control, emotional, less_s, severe) %>% 
+  rename(No = n_0, Yes = n_1, `%` = `%_0`,`% ` = `%_1`, Event = Variable) %>% 
+  select(Event, Yes,   `% `, No, `%`, ) %>% 
+  kable(caption  = "Distribution of women who experienced violence in past 12 months, by type of violence") %>%
+  kable_classic_2(font_size = 18)
+
+viol_tbl
+
+rm(control, cr_v, emotional, less_s, severe, v_table, control_vars, controlling_labels, emotional_labels, econ_labels, i, `NA`, no, phys_labels, Question, `yes, before last year`, `yes, last year`)
+
+```
+
+```{r violence_summary_analyticalsample}
+
+cr_v <- data %>% select(ever_control, ever_emotional, ever_lesssevere, ever_severe) %>% 
+  drop_na()
+
+# save(file = "data/cr_03.Rdata", cr_03)
+
+control <- cr_v %>% group_by(ever_control) %>% summarise(n = n()) %>% 
+  mutate(`%` = (round(n/sum(n)*100, 1))) %>% 
+  pivot_wider(names_from = ever_control, values_from = c(n, `%`)) %>% 
+  mutate(Variable = 'Ever control') 
+
+emotional <- cr_v %>% group_by(ever_emotional) %>% summarise(n = n()) %>% 
+  mutate(`%` = (round(n/sum(n)*100, 1))) %>% 
+  pivot_wider(names_from = ever_emotional, values_from = c(n, `%`)) %>% 
+  mutate(Variable = 'Ever emotional')  
+  
+less_s <-  cr_v %>% group_by(ever_lesssevere) %>% summarise(n = n()) %>% 
+  mutate(`%` = (round(n/sum(n)*100, 1))) %>% 
+  pivot_wider(names_from = ever_lesssevere, values_from = c(n, `%`)) %>% 
+  mutate(Variable = 'Ever less severe physical')  
+
+severe <- cr_v %>% group_by(ever_severe) %>% summarise(n = n()) %>% 
+  mutate(`%` = (round(n/sum(n)*100, 1))) %>% 
+  pivot_wider(names_from = ever_severe, values_from = c(n, `%`)) %>% 
+  mutate(Variable = 'Ever severe physical')  
+  
+  
+viol_tbl <- rbind(control, emotional, less_s, severe) %>% 
+  rename(No = n_0, Yes = n_1, `%` = `%_0`,`% ` = `%_1`, Event = Variable) %>% 
+  select(Event, Yes,   `% `, No, `%`, ) %>% 
+  kable(caption  = "Distribution of women who experienced violence in past 12 months, by type of violence") %>%
+  kable_classic_2(font_size = 18)
+
+viol_tbl
+
+rm(control, cr_v, emotional, less_s, severe, v_table, control_vars, controlling_labels, emotional_labels, econ_labels, i, `NA`, no, phys_labels, Question, `yes, before last year`, `yes, last year`)
+```
+
+## Education
+
+### Levels of education
+
+```{r}
+
+#s106a, # education level w
+#                 sm106a, # education level h
+#                  s106b, # Grade of school completed w
+#                  sm106b, # Grade of school completed h
+#                  v133,  # Education in single years w
+#                  mv133, # Education in single years h
+#                  v149, # Educational attainment w
+#                  mv149) %>% # Educational attainment h
+
+# Education level
+
+edu_level <- cr_02 %>% group_by(s106a) %>% 
+  summarize(Women = n()) %>% 
+  mutate(`%` = (round(Women/sum(Women)*100, 1)),
+         level = case_when(s106a == "no education/none" ~ 0,
+              s106a == "preschool" ~1, 
+              s106a == "primary" ~2, 
+              s106a == "middle academy or classic (basic high school)" ~ 3,
+              s106a == "middle technical (technical high school)" ~ 4,
+              s106a == "secondary (high school)" ~ 5, 
+              s106a == "technical professional (after high school)" ~ 6,
+              s106a == "technological" ~ 7, 
+              s106a == "professional (towards bachelor degree)" ~ 8,
+              s106a == "post-graduate training" ~ 9,
+              s106a == "master's degree studies" ~ 10, 
+              s106a == "phd" ~ 11)) %>% 
+  rename(Education_level = s106a) 
+  
+edu_level <- cr_02 %>% 
+  group_by(sm106a) %>% 
+  summarize(Men = n()) %>% 
+  mutate(`% ` = (round(Men/sum(Men)*100, 1))) %>% 
+  rename(Education_level = sm106a) %>% 
+  left_join(edu_level) %>% arrange(level)
+
+edu_level_tbl <- edu_level %>% select(-level) %>% kable() %>% kable_classic_2(font_size = 18) 
+
+edu_level_tbl
+
+```
+
+
+```{r}
+
+# Education level broad
+
+edu_level_b <- cr_02 %>% group_by(v149) %>% 
+  summarize(Women = n()) %>% 
+  mutate(`%` = (round(Women/sum(Women)*100, 1)),
+         level = case_when(v149 == "no education" ~ 0,
+              v149 == "incomplete primary" ~1, 
+              v149 == "complete primary" ~2, 
+              v149 == "incomplete secondary" ~ 3,
+              v149 == "complete secondary" ~ 4,
+              v149 == "higher" ~ 5)) %>% 
+  rename(Education_level = v149)
+  
+edu_level_b <- cr_02 %>% group_by(mv149) %>% 
+  summarize(Men = n()) %>% 
+  mutate(`% ` = (round(Men/sum(Men)*100, 1))) %>% 
+  rename(Education_level = mv149) %>% 
+  left_join(edu_level_b) %>% arrange(level)
+
+edu_broad_tbl <- edu_level_b %>% select(-level) %>% kable() %>% kable_classic_2(font_size = 18) 
+
+edu_broad_tbl
+
+```
+
+### Years of education
+
+```{r}
+
+# Years of education 
+years_edu <- cr_02$v133 %>% 
+  freq(plot = F) %>% as_data_frame() %>%
+  mutate(Years = c(0:18)) %>% 
+  filter(Years != 18) %>%  
+  mutate_if(is.numeric, round, 1) %>% 
+  rename(female = Frequency,`% ` = Percent) %>% 
+  mutate(`% ` = as.character(`% `))
+
+
+years_edu <- cr_02$mv133 %>% 
+  freq(plot = F) %>% as_data_frame() %>% 
+  mutate(Years = c(0:18)) %>%
+  filter(Years != 18) %>% 
+  mutate_if(is.numeric, round, 1) %>% 
+  rename(male = Frequency,`%` = Percent) %>% 
+  mutate(`%` = as.character(`%`)) %>% 
+  left_join(years_edu) %>% 
+  relocate(Years) %>% arrange(Years) %>% 
+  rename(`Years of education` = Years)
+
+years_edu <- years_edu %>% t()
+colnames(years_edu) <- as.character(c(1:18))
+rownames(years_edu) <- as.character(c("x", "Men", "%", "Women", "%"))
+
+years_edu_tbl <- years_edu[-1,] %>% as_data_frame(rownames = " ") %>%  kable(caption = "Years of education by gender", align = "l", digits = 1) %>% kable_classic_2(font_size = 18) 
+
+years_edu_tbl 
+
+rm(edu_rownames, years_edu)
+```
+
+### Relative education 
+
+```{r}
+
+# Relative education 
+
+rel_edu <- cr_02 %>% select(v133, mv133, v149, mv149) %>% 
+    rename(Years_m = mv133, Years_f = v133) %>% 
+    mutate(level_f = case_when(v149 == "no education" ~ 0,
+                v149 == "incomplete primary" ~1, 
+                v149 == "complete primary" ~2, 
+                v149 == "incomplete secondary" ~ 3,
+                v149 == "complete secondary" ~ 4,
+                v149 == "higher" ~ 5),
+           level_m = case_when(mv149 == "no education" ~ 0,
+                mv149 == "incomplete primary" ~1, 
+                mv149 == "complete primary" ~2, 
+                mv149 == "incomplete secondary" ~ 3,
+                mv149 == "complete secondary" ~ 4,
+                mv149 == "higher" ~ 5),
+           rel_level = if_else(level_f > level_m, 1, 0),
+           rel_years = if_else(Years_f > Years_m, 1, 0),
+           diff_years = Years_f - Years_m)
+         
+rel_edu_tbl <- rel_edu %>% group_by(rel_level) %>% summarise(n = n()) %>% 
+  mutate(`%` = round(n/sum(n)*100, 1)) %>% 
+  rename(By_level = n,
+         Relation = rel_level)
+
+rel_edu_tbl <- rel_edu %>% group_by(rel_years) %>% summarise(n = n()) %>% 
+  mutate(`% ` = round(n/sum(n)*100, 1)) %>% 
+  rename(By_years = n,
+         Relation = rel_years) %>% left_join(rel_edu_tbl) %>% 
+  mutate(Relation = if_else(Relation == 0, "Male more educated", "Female more educated")) %>% 
+  kable(caption = "Relative education by couples") %>%
+  kable_classic_2(font_size = 18)
+
+rel_edu_tbl
+```
+
+## Other (relative) economic variables
+
+```{r}
+
+
+rel_econ <- cr_02 %>% select(v745a, # Home owning
+                 mv745a, 
+                 v745b, # Land owning 
+                 mv745b,
+                 s815b, # Ownership of house/apartment where respondent lives
+                 sm716b, 
+                 s815c, 
+                 sm716c,# Ownership of other house/apartment
+                 v190, # Wealth index 
+                 mv190,
+                 v714, # employment status 
+                 mv714, 
+                 v731, # Worked in the last 12 months
+                 mv731, 
+                 v741, # Type of earnings
+                 mv741,
+                 v746) # Relative income
+
+rel_econ_tbl <- rel_econ  %>% 
+  mutate(home_own = if_else(mv745a == "does not own" & 
+                              v745a != "does not own", 1, 0),
+         land_own = if_else(mv745b == "does not own" &
+                              v745b != "does not own", 1, 0),
+         residence_own = if_else(sm716b == "does not own" & 
+                                   s815b != "does not own", 1, 0),
+         wealth_w_factor = case_when(v190 == "poorest" ~ 1,
+                                     v190 == "poorer" ~ 2,
+                                     v190 == "middle" ~ 3,
+                                     v190 == "richer" ~ 4,
+                                     v190 == "richest" ~ 5),
+         wealth_m_factor = case_when(mv190 == "poorest" ~ 1,
+                                     mv190 == "poorer" ~ 2,
+                                     mv190 == "middle" ~ 3,
+                                     mv190 == "richer" ~ 4,
+                                     mv190 == "richest" ~ 5),
+         rel_wealth = if_else(wealth_w_factor > wealth_m_factor, 1, 0),
+         rel_work_st = if_else(v714 == "yes" & mv714 == "no", 1, 0),
+         rel_work_12 = if_else(v731 == "in the past year" & mv731 == "no", 1,0),
+         rel_income = if_else(v746 == "husband/partner doesn't bring in money" | 
+                                v746 == "more than him", 1, 0)) %>% 
+  select(home_own, land_own, residence_own,rel_wealth, 
+         rel_work_st, rel_work_12, rel_income)
+
+
+a <- rel_econ_tbl %>% summarize_at(vars(home_own), funs(sum, mean), na.rm = T) %>%
+  mutate(Variable = "Female owns a house and male doesn't",
+         mean = round(mean, 2)) %>% relocate(Variable)
+
+b <- rel_econ_tbl %>% summarize_at(vars(land_own), funs(sum, mean), na.rm = T) %>%
+  mutate(Variable = "Female owns land and male doesn't",
+         mean = round(mean, 2)) %>% relocate(Variable)
+
+c <- rel_econ_tbl %>% summarize_at(vars(residence_own), funs(sum, mean), na.rm = T) %>% mutate(Variable = "Female the house where they live and male doesn't",
+         mean = round(mean, 2)) %>% relocate(Variable)
+
+d <- rel_econ_tbl %>% summarize_at(vars(rel_wealth), funs(sum, mean), na.rm = T) %>%
+  mutate(Variable = "Female has more weahlth than male",
+         mean = round(mean, 2)) %>% relocate(Variable)
+
+e <- rel_econ_tbl %>% summarize_at(vars(rel_work_st), funs(sum, mean), na.rm = T) %>%
+  mutate(Variable = "Female is employed and male is not",
+         mean = round(mean, 2)) %>% relocate(Variable)
+
+f <- rel_econ_tbl %>% summarize_at(vars(home_own), funs(sum, mean), na.rm = T) %>%
+  mutate(Variable = "Female employed in last 12m, male not",
+         mean = round(mean, 2)) %>% relocate(Variable)
+
+g <- rel_econ_tbl %>% summarize_at(vars(rel_income), funs(sum, mean), na.rm = T) %>%
+  mutate(Variable = "Female earns more than male",
+         mean = round(mean, 2)) %>% relocate(Variable)
+
+rel_econ_tbl <- rbind(a, b, c, d, e, f, g) %>% 
+  rename(n = sum) %>% 
+  mutate(`%` = mean*100)  %>% select(-mean) %>% arrange(desc(n)) %>% 
+  kable(caption = "Relative female empowerment") %>%
+  kable_classic_2(font_size = 18)
+
+rel_econ_tbl
+
+```
+
+```{r}
+rm(rel_econ, rel_econ_tbl, rel_edu, rel_edu_tbl, data_trim, control_tbl, econ_tbl, edu_level, edu_broad_tbl, edu_level_b, edu_level_tbl, emo_tbl, phys_tbl, cr_02, cr_02_01, cr_03, viol_tbl, samples_tbl, Freq)
+
+```
+
+```{r}
+
+data <- data %>% 
+  mutate(factor_mv149 = 
+           case_when(mv149 == "no education" ~ "1_no_education",
+                     mv149 == "incomplete primary" ~ "2_incomplete_primary",
+                     mv149 == "complete primary" ~ "3_complete_primary",
+                     mv149 == "incomplete secondary" ~ "4_incomplete_secondary",
+                     mv149 == "complete secondary" ~ "5_complete secondary",
+                     mv149 == "higher" ~ "6_higher")) 
+
+data$factor_mv149 %>% 
+  table() %>% 
+  kable(caption = "Education level - men")
+
+
+data <- data %>% 
+  mutate(factor_v149 = 
+           case_when(v149 == "no education" ~ "1_no_education",
+                     v149 == "incomplete primary" ~ "2_incomplete_primary",
+                     v149 == "complete primary" ~ "3_complete_primary",
+                     v149 == "incomplete secondary" ~ "4_incomplete_secondary",
+                     v149 == "complete secondary" ~ "5_complete secondary",
+                     v149 == "higher" ~ "6_higher")) 
+
+data$factor_v149 %>% 
+  table() %>% 
+  kable(caption = "Education level-women" )
+```
+
+# Correlation matrices (Spearman) 
+
+```{r correlations_violence}
+
+# Correlation matrices
+load("figures/corr_violence")
+cor_violence
+```
+
+```{r correlations_attitudes}
+load("figures/corr_att")
+cor_att
+
+load("figures/cor_controls")
+cor_controls
+
+```
+
+# Descriptive plots 
+
+```{r}
+
+data %>% mutate(diff_years = age_m -age_f) %>% ggplot(aes(x = diff_years)) +
+  geom_histogram()
+
+data %>% mutate(diff_years = eduyear_m - eduyear_f) %>% hist(data$diff_years)
+
+m <- data %>% summarize(age_average = ((age_m + age_f)/2))
+````
+```{r}
+
+age_diff_hist <- data %>% summarize(age_average = ((age_m + age_f)/2),
+                   diff_age = age_m - age_f,
+                   factor_diff_age = case_when(diff_age > 0 ~ "Man is older",
+                                            diff_age == 0 ~ "Same age",
+                                            diff_age < 0 ~ "Woman is older")) %>% 
+  na.omit() %>% 
+  ggplot(aes(x = diff_age,
+             fill = factor_diff_age)) + 
+  geom_histogram(bins = 35) +
+  theme_minimal() +
+  labs(title = "Distribution of age gap within couples",
+       y = "",
+       x = "Age difference in years (Men - Women)") +
+  scale_fill_brewer(palette = "Set1", "")
+
+ggsave(age_diff_hist, file = "figures/age_diff_plot.png",width = 8, height = 5)
+
+```
+
+```{r}
+
+data <-  data %>% summarize(age_average = ((age_m + age_f)/2),
+                   diff_age = age_m - age_f,
+                   factor_diff_age = case_when(diff_age > 0 ~ "Man is older",
+                                            diff_age == 0 ~ "Same age",
+                                            diff_age < 0 ~ "Woman is older"))
+
+
+prop.table(table(data$factor_diff_age))
+
+```
+
+```{r}
+
+data <-  data %>% 
+  summarize( factor_diff_lev = case_when(edulev_f > edulev_m ~ "woman more educated",
+                                         edulev_f == edulev_m ~ "equally educated", 
+                                         edulev_f < edulev_m ~ "woman less educated"))
+
+
+prop.table(table(data$factor_diff_lev))
+
+
+```
+
+
+```{r}
+
+
+data %>% summarize(edu_average = ((eduyear_m + eduyear_f)/2),
+                diff_edu = eduyear_m - eduyear_f,
+                factor_diff_edu = case_when(diff_edu > 1 ~ "Man",
+                                            diff_edu == 0 ~ "Same",
+                                            diff_edu < 1 ~ "Woman")) %>% 
+  na.omit() %>% 
+  ggplot(aes(x = edu_average,
+             y = diff_edu,
+             color = factor_diff_edu)) + 
+  geom_col() +
+  theme_minimal()
+  
+
+data %>% mutate(diff_age = case_when(age_m - age_f >= 10 ~ "Man older 10yrs",
+                                     age_m - age_f >= 5 & 
+                                       age_m - age_f < 10 ~ "Man older 5yrs",
+                                     age_m - age_f > 0  & 
+                                       age_m - age_f < 5 ~ "Man older 5yrs",)))
+
+hist(data$diff_years)
+
+```
