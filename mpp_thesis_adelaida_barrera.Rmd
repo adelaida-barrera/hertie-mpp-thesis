@@ -1,0 +1,1331 @@
+---
+title: "Results - MPP Thesis"
+author: "Adelaida Barrera"
+date: "4/9/2021"
+output:
+  pdf_document: default
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(corrplot)
+library(ggcorrplot)
+library(stargazer)
+library(kableExtra)
+library(broom)
+library(ggeffects)
+
+knitr::opts_chunk$set(echo = FALSE, 
+                      warning = F, 
+                      message = F,
+                      fig.width = 8, 
+                      fig.height = 8, 
+                      fig.align = "center",
+                      cache = TRUE,
+                      fig.pos = "!H", 
+                      out.extra = "")
+
+# Load full womens recode
+load("data/COIR72FL.Rdata") 
+# Load dataset after prep.
+load("data/clean_data.Rdata")
+```
+
+## Analytical sample 
+
+```{r table1_sample, eval=TRUE}
+# Full sample of women 
+a <- IR_2015 %>% summarise(Sample = "All women interviewed", 
+                         n = n()) 
+
+# Women interviewed for domestic violence module 
+b <- IR_2015 %>% 
+  filter(v044 == "woman selected and interviewed") %>% 
+  summarise(Sample = "Women selected for domestic violence module",  n = n())
+  
+# Women currently married or living with partner 
+c <- IR_2015 %>% 
+  filter(v044 == "woman selected and interviewed" &
+           v502 == "currently in union/living with a man") %>%
+  summarise(Sample = "Women currently married or living with partner", n = n()) 
+
+# number of valid pair observations
+
+load("data/cr_02.RData")
+
+d <- cr_02 %>% summarise(Sample = "Valid couple cases", n = n())
+
+# number of couples living together since at least 2014 
+
+cr_02_01 <- cr_02 %>% 
+  mutate(union_last12m = if_else(s607y_1 > 2013 |
+                                   s607y_2 > 2013 |
+                                   s607y_3 > 2013 |
+                                   s607y_4 > 2013 |
+                                   s607y_5 > 2013, 
+                                 true = 1, 
+                                 false = 0,
+                                 missing = 0)) %>% 
+  filter(union_last12m == 0)
+
+e <- cr_02_01 %>% 
+  summarise(Sample = "Valid couples that moved together before 2014" , n = n())
+
+# Number of couples after eliminating NA's in DV questions
+f <- cr_02_01 %>% 
+  filter(is.na(d103c) == F) %>% 
+  summarise(Sample = "Number of couples after eliminating missing observations", 
+            n = n())
+
+samples_tbl <- rbind(a, b, c, d, e, f) %>%
+  kableExtra::kable(caption = "Sample sizes",
+                    format = "latex") %>%
+  kableExtra::kable_paper(full_width = F) 
+
+samples_tbl
+
+#kable_as_image(samples_tbl, filename =  "Table.1", file_format = "png", keep_pdf = F, density = 300)
+
+#rm(a ,b, c, d, e, f, g)
+
+```
+
+### Descriptive statistics 
+
+```{r table2_descriptives, eval=TRUE}
+
+# List of names of categories to be included 
+variables <- c("Experienced control by male partner (%)", 
+               "Experienced emotional violence by male partner (%)", 
+               "Experienced less severe phyiscal violence by male partner (%)",
+               "Experienced severe physical violence by male partner (%)",
+               "Level of education: less than primary (women)", 
+               "Level of education: primary (women)", 
+               "Level of education: secondary (women)", 
+               "Level of education: higher (women)", 
+               "Level of education: less than primary (men)", 
+               "Level of education: primary (men)", 
+               "Level of education: secondary (men)", 
+               "Level of education: higher (men)", 
+               "Female partner attained a higher education level than male (%)",
+               "Female partner earns more money than male (%)", 
+               "Age (women)", 
+               "Age (men)",
+               "Number of children born (women)",
+               "Afro-colombians (women) (%)", 
+               "Indigenous (women) (%)",
+               "Other minorities (women) (%)", 
+               "Non-minorities (women) (%)", 
+               "Urban households (women) (%)", 
+               "Rural households (%)")
+
+# Function to crete rows of descriptives table 
+
+Create_row <- function(x, dataset){dataset %>% 
+    summarise(`% or mean` = round(mean({{x}}), 2), 
+              sd = round(sd({{x}}), 2),
+              min = min({{x}}), 
+              max = max({{x}}),
+              range = paste0(min, "-" , max)) %>% 
+    select(`% or mean`, sd, range) %>% rbind(descr_tbl, .)
+}
+
+# Empty vectors and df to fill 
+
+mean <- c()
+sd <- c()
+range <- c()
+
+descr_tbl <- tibble(mean, sd, range)
+
+# Create each row of table using function created above
+# Violence
+
+descr_tbl <- Create_row(x = ever_control, data)
+descr_tbl <- Create_row(x = ever_emotional, data)
+descr_tbl <- Create_row(x = ever_lesssevere, data)
+descr_tbl <- Create_row(x = ever_severe, data)
+
+# Education level  
+
+#Dummies for education level categories
+data <- data %>% 
+  mutate(edulev_f_no_ed = ifelse(factor_edulev_f == "1-less than primary", 1, 0),
+         edulev_f_prim = if_else(factor_edulev_f == "2-primary", 1, 0),
+         edulev_f_secon = if_else(factor_edulev_f == "3-secondary", 1, 0),
+         edulev_f_high = if_else(factor_edulev_f == "4-higher", 1, 0),
+         edulev_m_no_ed = ifelse(factor_edulev_m == "1-less than primary", 1,0),
+         edulev_m_prim = if_else(factor_edulev_m == "2-primary", 1,0),
+         edulev_m_secon = if_else(factor_edulev_m == "3-secondary", 1, 0),
+         edulev_m_high = if_else(factor_edulev_m== "4-higher", 1, 0))
+
+#Create rows for table  
+
+descr_tbl <- Create_row(x = edulev_f_no_ed, data)
+descr_tbl <- Create_row(x = edulev_f_prim, data)
+descr_tbl <- Create_row(x = edulev_f_secon, data)
+descr_tbl <- Create_row(x = edulev_f_high, data)
+descr_tbl <- Create_row(x = edulev_m_no_ed, data)
+descr_tbl <- Create_row(x = edulev_m_prim, data)
+descr_tbl <- Create_row(x = edulev_m_secon, data)
+descr_tbl <- Create_row(x = edulev_m_high, data)
+
+#relative education level
+data <- data %>% mutate(female_higher_level = if_else(edulev_f > edulev_m, 1, 0))
+
+descr_tbl <- Create_row(x = female_higher_level, data)
+
+
+# Female breadwinners 
+
+data <- data %>% mutate(rel_income_num = as.numeric(rel_income),
+                        rel_income_num = if_else(rel_income_num == 2, 1, 0)) 
+
+descr_tbl <- Create_row(x = rel_income_num, data = data)
+
+descr_tbl <- Create_row(x = v012, data) # female respondents' age 
+
+descr_tbl <- Create_row(x = mv012, data) # male respondents' age
+
+descr_tbl <- Create_row(x = v201, data) # children ever born 
+
+descr_tbl <- Create_row(x = afro_dummy, data) # women's ethnicity
+descr_tbl <- Create_row(x = indigenous_dummy, data) 
+descr_tbl <- Create_row(x = minorities_dummy, data) 
+descr_tbl <- Create_row(x = mestizo_dummy, data) 
+
+descr_tbl <- Create_row(x = urban_dummy, data) #Plce of residence (urban/rural)
+descr_tbl <- Create_row(x = rural_dummy, data) 
+
+descr_tbl <- descr_tbl %>% mutate(Variable = variables) %>% relocate(Variable)
+
+descr_tbl_prnt <- descr_tbl %>% 
+  kbl(caption = "Desrciptive statistics for all relevant variables",
+      #  format = "latex",
+      align = "lccc") %>% 
+  kable_classic_2(latex_options =c("scale_down"), 
+                  full_width = F) %>% 
+  pack_rows("Intimate partner Violence (in last 12 months)", 1,4) %>% 
+  pack_rows("Women's education", 5, 8) %>% 
+  pack_rows("Men's education", 9, 12) %>% 
+  pack_rows("Relative empowerment", 13, 14) %>% 
+  pack_rows("Other", 15, 23)
+
+descr_tbl_prnt
+
+```
+
+```{r cross_table, eval=TRUE}
+
+cross_edulev <- 
+  prop.table(table(data$ever_control, data$factor_edulev_f), 2) %>% 
+  as.data.frame() %>% arrange(Var2) %>% 
+  pivot_wider(names_from = Var1, values_from = Freq) %>% 
+  mutate(`Controlling behaviors` = round(`1`*100, 1)
+        # ,`Did not experience control` = round(`0`*100, 1)
+        ) %>% select(c(1,4)) %>% 
+  
+  left_join(prop.table(table(data$ever_emotional, data$factor_edulev_f), 2) %>%
+  as.data.frame() %>% arrange(Var2) %>%
+  pivot_wider(names_from = Var1, values_from = Freq) %>% 
+  mutate(`Emotional violence` = round(`1`*100, 1)
+         #,`Did not experience emotional violence` = round(`0`*100, 1)
+         ) %>% select(c(1,4)), by = "Var2") %>% 
+  
+  left_join(prop.table(table(data$ever_lesssevere, data$factor_edulev_f), 2) %>%
+  as.data.frame() %>% arrange(Var2) %>%
+  pivot_wider(names_from = Var1, values_from = Freq) %>% 
+  mutate(`Less severe violence` = round(`1`*100, 1)
+         #,`Did not experience less severe v` = round(`0`*100, 1)
+         ) %>% select(c(1,4)), by = "Var2") %>% 
+  
+  left_join(prop.table(table(data$ever_severe, data$factor_edulev_f), 2) %>%
+  as.data.frame() %>% arrange(Var2) %>%
+  pivot_wider(names_from = Var1, values_from = Freq) %>% 
+  mutate(`Severe violence` = round(`1`*100, 1)
+         #,`Did not experience severe v` = round(`0`*100, 1)
+         ) %>% select(c(1,4)), by = "Var2") 
+  
+cross_bw <- 
+  prop.table(table(data$ever_control, data$rel_income), 2) %>% 
+  as.data.frame() %>% arrange(Var2) %>% 
+  pivot_wider(names_from = Var1, values_from = Freq) %>% 
+  mutate(`Controlling behaviors` = round(`1`*100, 1)
+        # ,`Did not experience control` = round(`0`*100, 1)
+        ) %>% select(c(1,4)) %>%
+  
+  left_join(prop.table(table(data$ever_emotional, data$rel_income), 2) %>%
+  as.data.frame() %>% arrange(Var2) %>%
+  pivot_wider(names_from = Var1, values_from = Freq) %>% 
+  mutate(`Emotional violence` = round(`1`*100, 1)
+         #,`Did not experience less severe v` = round(`0`*100, 1)
+         ) %>% select(c(1,4)), by = "Var2") %>% 
+  
+  left_join(prop.table(table(data$ever_lesssevere, data$rel_income), 2) %>%
+  as.data.frame() %>% arrange(Var2) %>%
+  pivot_wider(names_from = Var1, values_from = Freq) %>% 
+  mutate(`Less severe violence` = round(`1`*100, 1)
+         #,`Did not experience less severe v` = round(`0`*100, 1)
+         ) %>% select(c(1,4)), by = "Var2") %>% 
+  
+  left_join(prop.table(table(data$ever_severe, data$rel_income), 2) %>%
+  as.data.frame() %>% arrange(Var2) %>%
+  pivot_wider(names_from = Var1, values_from = Freq) %>% 
+  mutate(`Severe violence` = round(`1`*100, 1)
+         #,`Did not experience less severe v` = round(`0`*100, 1)
+         ) %>% select(c(1,4)), by = "Var2")
+
+cross_att <- 
+  prop.table(table(data$ever_control, data$index_dummy), 2) %>% 
+  as.data.frame() %>% arrange(Var2) %>% 
+  pivot_wider(names_from = Var1, values_from = Freq) %>% 
+  mutate(`Controlling behaviors` = round(`1`*100, 1)
+        # ,`Did not experience control` = round(`0`*100, 1)
+        ) %>% select(c(1,4)) %>%
+  
+   left_join(prop.table(table(data$ever_emotional, data$index_dummy), 2) %>%
+  as.data.frame() %>% arrange(Var2) %>%
+  pivot_wider(names_from = Var1, values_from = Freq) %>% 
+  mutate(`Emotional violence` = round(`1`*100, 1)
+         #,`Did not experience less severe v` = round(`0`*100, 1)
+         ) %>% select(c(1,4)), by = "Var2") %>% 
+  
+  left_join(prop.table(table(data$ever_lesssevere, data$index_dummy), 2) %>%
+  as.data.frame() %>% arrange(Var2) %>%
+  pivot_wider(names_from = Var1, values_from = Freq) %>% 
+  mutate(`Less severe violence` = round(`1`*100, 1)
+         #,`Did not experience less severe v` = round(`0`*100, 1)
+         ) %>% select(c(1,4)), by = "Var2") %>% 
+  
+  left_join(prop.table(table(data$ever_severe, data$index_dummy), 2) %>%
+  as.data.frame() %>% arrange(Var2) %>%
+  pivot_wider(names_from = Var1, values_from = Freq) %>% 
+  mutate(`Severe violence` = round(`1`*100, 1)
+         #,`Did not experience less severe v` = round(`0`*100, 1)
+         ) %>% select(c(1,4)), by = "Var2")
+
+
+ind_variables <- c("Less than primary",
+                   "Primary",
+                   "Secondary",
+                   "Higher education",
+                   "Woman does not earn more than man",
+                   "Woman earns more than man",
+                   "Not very traditional male partner (bottom 90%)",
+                   "Very traditional male partner (top 10%)")
+
+cross_table <- 
+  rbind(cross_edulev,
+        cross_bw,
+        cross_att) %>% 
+  mutate(Subgroup = ind_variables) %>% relocate(Subgroup)  %>%  select(-Var2) %>% 
+  kableExtra::kbl(caption = "Cross tabulation between dependent and independent variables* (percentage of women who have experienced violence in last 12 months)",
+   #   format = "latex",
+      align = "lrrrr") %>% 
+  kableExtra::kable_classic_2(latex_options =c("scale_down")) %>%
+  kableExtra::pack_rows("Female education level", 1,4) %>% 
+  kableExtra::pack_rows("Female breadwinners", 5, 6) %>% 
+  kableExtra::pack_rows("Traditional gender attitudes", 7, 8) 
+
+cross_table
+
+```
+
+# Logistic regression models
+
+```{r models_control, results='asis'}
+
+# Controlling behaviors 
+
+## Model 1. Control. Resource model.
+
+# Resource model
+m_control_res <- glm(ever_control ~ factor_edulev_f + 
+                       factor_edulev_m + 
+                       age_f +  
+                       children_nr +
+                       ethnicity + 
+                       place, 
+                     family = binomial(link = "logit"),
+                     data = data)
+
+#stargazer(m_control_res, type = "text")
+#exp(coef(m_control_res))
+
+c_control_res <- exp(coef(m_control_res)) 
+ci_control_res <- exp(confint(m_control_res))
+p_control_res <- list(summary(m_control_res)$coefficients[,4])
+se_control_res <- m_control_res %>% tidy() %>% select(std.error)
+
+## Model 2. Control. Cultural model
+
+m_control_cul <- glm(ever_control ~ index_dummy +
+                       factor_edulev_f + 
+                       factor_edulev_m +
+                       age_f + 
+                       children_nr +
+                       ethnicity + 
+                       place, 
+                     family = binomial(link = "logit"),
+                     data = data)
+
+#stargazer(m_control_cul, type = "text")
+#exp(coef(m_control_cul))
+
+c_control_cul <- exp(coef(m_control_cul)) 
+ci_control_cul <- exp(confint(m_control_cul))
+p_control_cul <- list(summary(m_control_cul)$coefficients[,4])
+se_control_cul <- m_control_cul %>% tidy() %>% select(std.error) 
+
+
+## Model 3 Relative resource model
+
+m_control_res_rel <- glm(ever_control ~ rel_income +        
+                           index_dummy +
+                           factor_edulev_f +
+                           factor_edulev_m +
+                           age_f +  
+                           children_nr +
+                           ethnicity + 
+                           place, 
+                         family = binomial(link = "logit"),
+                         data = data)
+
+#stargazer(m_control_res_rel, type = "text")
+#exp(coef(m_control_res_rel)) 
+
+c_control_res_rel <- exp(coef(m_control_res_rel)) 
+ci_control_res_rel <- exp(confint(m_control_res_rel))
+p_control_res_rel <- list(summary(m_control_res_rel)$coefficients[,4])
+se_control_res_rel <- m_control_res_rel %>% tidy() %>% select(std.error)  
+
+
+## Model 4 Control. Gendered relative resource model
+
+
+m_control_gen <- glm(ever_control ~ interaction +
+                         factor_edulev_f + 
+                         factor_edulev_m + 
+                         age_f + 
+                         children_nr +
+                         ethnicity + 
+                         place,
+                     family = binomial(link = "logit"),
+                     data = data)
+
+# stargazer(m_control_gen, type = "text")
+#exp(coef(m_control_gen)) 
+
+c_control_gen <- exp(coef(m_control_gen))
+ci_control_gen <- exp(confint(m_control_gen))
+p_control_gen <- list(summary(m_control_gen)$coefficients[,4])
+
+```
+
+```{r stargazer_control, results='asis'}
+
+# Regression table.  Dependent variable: Controlling behaviors 
+
+stargazer(m_control_res,
+          m_control_cul,
+          m_control_res_rel,
+          m_control_gen, 
+          coef = list(c_control_res, 
+                      c_control_cul,
+                      c_control_res_rel,
+                      c_control_gen), 
+          ci = T, 
+          ci.custom = list(ci_control_res, 
+                           ci_control_cul,
+                           ci_control_res_rel, 
+                           ci_control_gen),
+          p= c(p_control_res, 
+               p_control_cul,
+               p_control_res_rel,
+               p_control_gen),
+          star.cutoffs = c(0.05, 0.01, 0.001),
+          order = c("interactionFemale BW Traditional GA",
+                    "interactionNo Female BW no Traditional GA",
+                    "interactionNo Female BW Traditional GA",
+                     "rel_income1",
+                    "index_dummy"),
+          omit = c("age_f",
+                   "children_nr",
+                   "ethnicityAfro-colombian",
+                   "ethnicityIndigenous",
+                   "ethnicityOther minorities",
+                   "placerural"),
+                    covariate.labels = c("FBW and traditional",
+                               "Non-FBW and non-TGA",
+                               "Non-FBW and TGA",
+                               "Female bread-winner",
+                               "Traditional GA",
+                               "Education: primary (W)",
+                               "Education: secondary (W)",
+                               "Education: higher (W)",
+                               "Education: primary (M)",
+                               "Education: secondary (M)",
+                               "Education: higher (M)",
+                               "Constant"),
+          #no.space = T,
+          column.sep.width = "4pt",
+          dep.var.labels = c("Controlling behaviors (12m)"),
+          single.row = F, 
+          header = F, 
+          font.size = "small",
+          title = "Results from logistic regression models\\\\Odds ratios of experiencing controlling behaviors in last 12 months.",
+          notes = c(
+              "FBW = Female bread-winner. TGA = Traditional gender attitudes. The reference category for ethni-",
+              "city is composed of all inviduals not belonging to an ethnic minority. The female bread-winners",
+              "reference category are all women who do not earn more money than their partner, while the reference",
+              "for the education variables are individuals with no education or less than complete primary.",
+              "The interaction term takes as reference the category ´FBW and non-TGA´."),
+          notes.align = "l"
+        #  type = "text"
+        )
+
+# rm(m_control_cul, m_control_gen, m_control_res, m_control_res_rel, ci_control_cul, ci_control_gen, ci_control_res, ci_control_res, ci_control_res_rel)
+
+```
+
+```{r model_emotional}
+
+
+## Model 5. Emotional. Resource model.
+
+# Resource model
+m_emo_res <- glm(ever_emotional ~ factor_edulev_f + 
+                   factor_edulev_m + 
+                   age_f + 
+                   children_nr +
+                   ethnicity + 
+                   place, 
+                 family = binomial(link = "logit"),
+                 data = data)
+
+#stargazer(m_emo_res, type = "text")
+#exp(coef(m_emo_res))
+
+c_emo_res <- exp(coef(m_emo_res)) 
+ci_emo_res <- exp(confint(m_emo_res))
+p_emo_res <- list(summary(m_emo_res)$coefficients[,4])
+se_emo_res <- m_emo_res %>% tidy() %>% select(std.error)
+
+
+## Model 6. Emotional violence. Cultural model 
+
+m_emo_cul <- glm(ever_emotional ~ index_dummy +
+                       factor_edulev_f + 
+                       factor_edulev_m +
+                       age_f + 
+                       children_nr +
+                       ethnicity + 
+                       place, 
+                     family = binomial(link = "logit"),
+                     data = data)
+
+#stargazer(m_emo_cul, type = "text")
+#exp(coef(m_emo_cul))
+
+c_emo_cul <- exp(coef(m_emo_cul)) 
+ci_emo_cul <- exp(confint(m_emo_cul))
+p_emo_cul <- list(summary(m_emo_cul)$coefficients[,4])
+se_emo_cul <- m_emo_cul %>% tidy() %>% select(std.error) 
+
+
+## Model 7.Emotional violence. Relative resource model
+
+m_emo_res_rel <- glm(ever_emotional ~ rel_income +   
+                       index_dummy +
+                       factor_edulev_f +
+                       factor_edulev_m +
+                       age_f +  
+                       children_nr +
+                       ethnicity + 
+                       place, 
+                     family = binomial(link = "logit"),
+                     data = data)
+
+#stargazer(m_emo_res_rel, type = "text")
+#exp(coef(m_emo_res_rel)) 
+
+c_emo_res_rel <- exp(coef(m_emo_res_rel)) 
+ci_emo_res_rel <- exp(confint(m_emo_res_rel))
+p_emo_res_rel <- list(summary(m_emo_res_rel)$coefficients[,4])
+se_emo_res_rel <- m_emo_res_rel %>% tidy() %>% select(std.error)  
+
+
+## Model 8. Emotional violence. Gendered relative resource model
+
+m_emo_gen <- glm(ever_emotional ~ interaction +
+                         factor_edulev_f + 
+                         factor_edulev_m + 
+                         age_f + 
+                         children_nr +
+                         ethnicity + 
+                         place,
+                     family = binomial(link = "logit"),
+                     data = data)
+
+# stargazer(m_emo_gen, type = "text")
+#exp(coef(m_emo_gen)) 
+
+c_emo_gen <- exp(coef(m_emo_gen))
+ci_emo_gen <- exp(confint(m_emo_gen))
+p_emo_gen <- list(summary(m_emo_gen)$coefficients[,4])
+
+
+```
+
+```{r stargazer_emotional, results='asis',}
+
+# Regressiona table. Dependent variable: emotional violence. 
+
+stargazer(m_emo_res,
+          m_emo_cul,
+          m_emo_res_rel,
+          m_emo_gen, 
+          coef = list(c_emo_res, 
+                      c_emo_cul,
+                      c_emo_res_rel,
+                      c_emo_gen), 
+          ci = T, 
+          ci.custom = list(ci_emo_res, 
+                           ci_emo_cul,
+                           ci_emo_res_rel, 
+                           ci_emo_gen),
+          p= c(p_emo_res,
+               p_emo_cul,
+               p_emo_res_rel,
+               p_emo_gen),
+          star.cutoffs = c(0.05, 0.01, 0.001),
+          order = c("interactionFemale BW Traditional GA",
+                    "interactionNo Female BW no Traditional GA",
+                    "interactionNo Female BW Traditional GA",
+                    "rel_income1",
+                    "index_dummy"),
+          omit = c("age_f",
+                   "children_nr",
+                   "ethnicityAfro-colombian",
+                   "ethnicityIndigenous",
+                   "ethnicityOther minorities",
+                   "placerural"),
+                    covariate.labels = c("FBW and traditional",
+                               "Non-FBW and non-TGA",
+                               "Non-FBW and TGA",
+                               "Female bread-winner",
+                               "Traditional GA",
+                               "Education: primary (W)",
+                               "Education: secondary (W)",
+                               "Education: higher (W)",
+                               "Education: primary (M)",
+                               "Education: secondary (M)",
+                               "Education: higher (M)",
+                               "Constant"),
+          #no.space = T,
+          #type = "text",
+          column.sep.width = "4pt",
+          dep.var.labels = c("Emotional violence (12m)"),
+          single.row = F, 
+          header = F, 
+          font.size = "small",
+          title = "Results from logistic regression models\\\\Odds ratios of experiencing emotional violence in last 12 months.",
+          notes = c(
+              "FBW = Female bread-winner. TGA = Traditional gender attitudes. The reference category for ethni-",
+              "city is composed of all inviduals not belonging to an ethnic minority. The female bread-winners",
+              "reference category are all women who do not earn more money than their partner, while the reference",
+              "for the education variables are individuals with no education or less than complete primary.",
+              "The interaction term takes as reference the category ´FBW and non-TGA´."),
+          notes.align = "l" 
+  #        type = "text"
+)
+```
+
+```{r model_lesssevere, results='asis'}
+
+# Less severe violence  
+
+## Model 9. Less severe. Resource model 
+
+m_lesssev_res <- glm(ever_lesssevere ~ factor_edulev_f + 
+                       factor_edulev_m + 
+                       age_f + 
+                       children_nr + 
+                       ethnicity + 
+                       place,
+                     family = binomial(link = "logit"),
+                     data = data)
+
+#stargazer(m_lesssev_res, type = "text")
+#exp(coef(m_lesssev_res))
+
+c_lesssev_res <- exp(coef(m_lesssev_res)) 
+ci_lesssev_res <- exp(confint(m_lesssev_res))
+p_lesssev_res <- list(summary(m_lesssev_res)$coefficients[,4])
+se_lesssev_res <- m_lesssev_res %>% tidy() %>% select(std.error)
+
+
+## Model 10. Less severe violence. Cultural model. 
+
+m_lesssev_cul <- glm(ever_lesssevere ~ index_dummy +   
+                       factor_edulev_f +  
+                       factor_edulev_m +
+                       age_f + 
+                       children_nr + 
+                       ethnicity + 
+                       place , 
+                     family = binomial(link = "logit"),
+                     data = data)
+
+#stargazer(m_lesssev_cul, type = "text")
+#exp(coef(m_lesssev_cul)) 
+
+c_lesssev_cul <- exp(coef(m_lesssev_cul)) 
+ci_lesssev_cul <- exp(confint(m_lesssev_cul))
+p_lesssev_cul <- list(summary(m_lesssev_cul)$coefficients[,4])
+se_lesssev_cul <- m_lesssev_cul %>% tidy() %>% select(std.error)
+
+## Model 11. Less severe violence - Relative resource model
+
+m_lesssev_res_rel <- glm(ever_lesssevere ~ rel_income +    
+                           index_dummy +
+                           factor_edulev_f +  
+                           factor_edulev_m +
+                           age_f + 
+                           children_nr + 
+                           ethnicity + 
+                           place, 
+                         family = binomial(link = "logit"),
+                         data = data)
+
+#stargazer(m_lesssev_res_rel, type = "text")
+#exp(coef(m_lesssev_res_rel))
+
+c_lesssev_res_rel <- exp(coef(m_lesssev_res_rel)) 
+ci_lesssev_res_rel <- exp(confint(m_lesssev_res_rel))
+p_lesssev_res_rel <- list(summary(m_lesssev_res_rel)$coefficients[,4])
+se_lesssev_res_rel <- m_lesssev_res_rel %>% tidy() %>% select(std.error)
+
+
+## Model 12. Less severe violence - Gendered relative resource model.
+
+m_lesssev_gen <- glm(ever_lesssevere ~
+                         interaction +
+                         factor_edulev_f +  
+                         factor_edulev_m + 
+                         age_f + 
+                         children_nr + 
+                         ethnicity + 
+                         place, 
+                     family = binomial(link = "logit"),
+                     data = data)
+
+#stargazer(m_lesssev_gen, type = "text")
+#exp(coef(m_lesssev_gen)) 
+c_lesssev_gen <- exp(coef(m_lesssev_gen)) 
+
+ci_lesssev_gen <- exp(confint(m_lesssev_gen))
+p_lesssev_gen <- list(summary(m_lesssev_gen)$coefficients[,4])
+se_lesssev_gen <- m_lesssev_gen %>% tidy() %>% select(std.error)
+
+```
+
+```{r stargazer_lesssevere, results='asis'}
+
+## Regression table. Dependent variable: less severe violence 
+
+stargazer(m_lesssev_res,
+          m_lesssev_cul,
+          m_lesssev_res_rel,
+          m_lesssev_gen, 
+          coef = list(c_lesssev_res, 
+                      c_lesssev_cul, 
+                      c_lesssev_res_rel,
+                      c_lesssev_gen), 
+          ci = T, 
+          ci.custom = list(ci_lesssev_res, 
+                           ci_lesssev_cul,
+                           ci_lesssev_res_rel,   
+                           ci_lesssev_gen),
+          p = c(p_lesssev_res, 
+                p_lesssev_cul, 
+                p_lesssev_res_rel,
+                p_lesssev_gen), 
+          star.cutoffs = c(0.05, 0.01, 0.001), 
+          order = c("interactionFemale BW Traditional GA",
+                    "interactionNo Female BW no Traditional GA",
+                    "interactionNo Female BW Traditional GA",
+                    "rel_income1",
+                    "index_dummy"), 
+          omit = c("age_f",
+                   "children_nr",
+                   "ethnicityAfro-colombian",
+                   "ethnicityIndigenous",
+                   "ethnicityOther minorities",
+                   "placerural"),
+          covariate.labels = c("FBW and traditional",
+                               "Non-FBW and non-TGA",
+                               "Non-FBW and TGA",
+                               "Traditional GA",
+                               "Female bread-winner", 
+                               "Education: primary (W)",
+                               "Education: secondary (W)",
+                               "Education: higher (W)",
+                               "Education: primary (M)",
+                               "Education: secondary (M)",
+                               "Education: higher (M)",
+                               "Constant"),
+          #no.space = T,
+          column.sep.width = "4pt",
+          dep.var.labels = c("Less severe physical violence (12m)"),
+          single.row = F, 
+          header = F,  
+          font.size = "small",
+              title = "Results from logistic regression models\\\\Odds ratios of experiencing less severe violence in last 12 months.",
+          notes = c(
+              "FBW = Female bread-winner. TGA = Traditional gender attitudes. The reference category for ethni-",
+              "city is composed of all inviduals not belonging to an ethnic minority. The female bread-winners",
+              "reference category are all women who do not earn more money than their partner, while the reference",
+              "for the education variables are individuals with no education or less than complete primary.",
+              "The interaction term takes as reference the category ´FBW and non-TGA´"),
+          notes.align = "l"
+          #type = "text"
+          )
+```
+
+```{r model_severe, results='asis'}
+
+## Model 13. Severe violence - Resource model 
+
+# Resource model
+m_severe_res <- glm(ever_severe ~ factor_edulev_f + 
+                      factor_edulev_m + 
+                      age_f + 
+                      children_nr +
+                      ethnicity + 
+                      place, 
+                    family = binomial(link = "logit"),
+                    data = data)
+
+  #stargazer(m_severe_res, type = "text")
+#exp(coef(m_severe_res)) 
+
+c_severe_res <- exp(coef(m_severe_res)) 
+ci_severe_res <- exp(confint(m_severe_res))
+p_severe_res <- list(summary(m_severe_res)$coefficients[,4])
+se_severe_res <- m_severe_res %>% tidy() %>% select(std.error)
+
+## Model 14. Severe violence - Cultural model 
+
+m_severe_cul <- glm(ever_severe ~ index_dummy + 
+                      factor_edulev_f +  
+                      factor_edulev_m +
+                      age_f + 
+                      children_nr +
+                      ethnicity + 
+                      place, 
+                    family = binomial(link = "logit"),
+                    data = data)
+
+#stargazer(m_severe_cul, type = "text")
+#exp(coef(m_severe_cul))
+
+c_severe_cul <- exp(coef(m_severe_cul)) 
+ci_severe_cul <- exp(confint(m_severe_cul))
+p_severe_cul <-list(summary(m_severe_cul)$coefficients[,4])
+se_severe_cul <- m_severe_cul %>% tidy() %>% select(std.error)
+
+
+## Model 15: Severe violence - Relative resource model 
+
+m_severe_res_rel <- glm(ever_severe ~ rel_income +    
+                          index_dummy +
+                          factor_edulev_f +  
+                          factor_edulev_m +
+                          age_f + 
+                          children_nr + 
+                          ethnicity +
+                          place, 
+                        family = binomial(link = "logit"),
+                        data = data)
+
+#stargazer(m_severe_res_rel, type = "text")
+#exp(coef(m_severe_res_rel)) 
+
+c_severe_res_rel <- exp(coef(m_severe_res_rel)) 
+ci_severe_res_rel <- exp(confint(m_severe_res_rel))
+p_severe_res_rel <-list(summary(m_severe_res_rel)$coefficients[,4])
+se_severe_res_rel <- m_severe_res_rel %>% tidy() %>% select(std.error)
+
+
+## Model 16. Severe violence - Gendered relative resource model 
+
+m_severe_gen <- glm(ever_severe ~ 
+                        interaction  +      
+                        factor_edulev_f +  
+                        factor_edulev_m +
+                        age_f + 
+                        children_nr +
+                        ethnicity + 
+                        place, 
+                    family = binomial(link = "logit"),
+                    data = data)
+
+#stargazer(m_severe_gen, type = "text")
+#exp(coef(m_severe_gen))
+
+c_severe_gen <- exp(coef(m_severe_gen)) 
+ci_severe_gen <- exp(confint(m_severe_gen))
+p_severe_gen <-list(summary(m_severe_gen)$coefficients[,4])
+se_severe_gen <- m_severe_gen %>% tidy() %>% select(std.error)
+
+#stargazer(m_severe_gen, type = "text")
+#exp(coef(m_severe_gen)) 
+
+```
+
+```{r, stargazer_severe, results='asis'}
+
+## Regression table. Dependent variable:  severe violence  
+
+stargazer(m_severe_res,
+          m_severe_cul,
+          m_severe_res_rel,
+          m_severe_gen, 
+          coef = list(c_severe_res, 
+                      c_severe_cul,
+                      c_severe_res_rel,
+                      c_severe_gen), 
+          ci = T, 
+          ci.custom = list(ci_severe_res, 
+                           ci_severe_cul,
+                           ci_severe_res_rel,  
+                           ci_severe_gen),
+          p= c(p_severe_res, 
+               p_severe_cul,
+               p_severe_res_rel,
+               p_severe_gen), 
+          star.cutoffs = c(0.05, 0.01, 0.001),
+          order = c("interactionFemale BW Traditional GA",
+                    "interactionNo Female BW no Traditional GA",
+                    "interactionNo Female BW Traditional GA",
+                    "rel_income1",
+                    "index_dummy"),
+          omit = c("age_f",
+                   "children_nr",
+                   "ethnicityAfro-colombian",
+                   "ethnicityIndigenous",
+                   "ethnicityOther minorities",
+                   "placerural"),
+                    covariate.labels = c("FBW and traditional",
+                               "Non-FBW and non-TGA",
+                               "Non-FBW and TGA",
+                               "Traditional GA",
+                               "Female bread-winner", 
+                               "Education: primary (W)",
+                               "Education: secondary (W)",
+                               "Education: higher (W)",
+                               "Education: primary (M)",
+                               "Education: secondary (M)",
+                               "Education: higher (M)",
+                               "Constant"),
+          #no.space = T,
+          # column.sep.width = "4pt",
+          dep.var.labels = c("Severe physical violence (12m)"),
+          single.row = F,  
+          header = F, 
+          font.size = "small",
+          title = "Results from logistic regression models\\\\Odds ratios of experiencing severe violence in last 12 months.",
+          notes = c(
+              "FBW = Female bread-winner. TGA = Traditional gender attitudes. The reference category for ethni-",
+              "city is composed of all inviduals not belonging to an ethnic minority. The female bread-winners",
+              "reference category are all women who do not earn more money than their partner, while the reference",
+              "for the education variables are individuals with no education or less than complete primary.",
+              "The interaction term takes as reference the category ´FBW and non-TGA´"),
+          notes.align = "l"
+       #   type = "text"
+       )
+
+```
+
+
+# Predicted probabilities
+
+```{r predicted prob df}
+
+
+m_control_gen_plot <- glm(ever_control ~ index_dummy*rel_income +
+                            factor_edulev_f + 
+                            factor_edulev_m + 
+                            age_f + 
+                            children_nr +
+                            ethnicity + 
+                            place,
+                          family = binomial(link = "logit"),
+                          data = data)
+
+
+extracted_control <- ggeffects::ggpredict(m_control_gen_plot, 
+                                          terms = c("rel_income", "index_dummy [0,1]")) %>% 
+  as_data_frame() %>% 
+  mutate(variable = "control")
+                                      
+
+m_emo_gen_plot <- glm(ever_emotional ~ index_dummy*rel_income +
+                            factor_edulev_f + 
+                            factor_edulev_m + 
+                            age_f + 
+                            children_nr +
+                            ethnicity + 
+                            place,
+                          family = binomial(link = "logit"),
+                          data = data)
+
+
+extracted_emotional <- ggeffects::ggpredict(m_emo_gen_plot, 
+                                          terms = c("rel_income", "index_dummy [0,1]"))  %>% 
+  as_data_frame() %>% 
+  mutate(variable = "emotional")
+
+
+m_less_gen_plot <- glm(ever_lesssevere ~ index_dummy*rel_income +
+                            factor_edulev_f + 
+                            factor_edulev_m + 
+                            age_f + 
+                            children_nr +
+                            ethnicity + 
+                            place,
+                          family = binomial(link = "logit"),
+                          data = data)
+
+
+extracted_less <- ggeffects::ggpredict(m_less_gen_plot, 
+                                          terms = c("rel_income", "index_dummy [0,1]")) %>% 
+  as_data_frame() %>% 
+  mutate(variable = "less_severe")
+                                    
+
+
+m_severe_gen_plot <- glm(ever_severe ~ index_dummy * rel_income +
+                           factor_edulev_f + 
+                           factor_edulev_m + 
+                           age_f + 
+                           children_nr +
+                           ethnicity + 
+                           place,
+                         family = binomial(link = "logit"),
+                         data = data)
+
+
+extracted_severe <- ggeffects::ggpredict(m_severe_gen_plot, 
+                                         terms = c("rel_income", "index_dummy [0,1]")) %>% 
+    as_data_frame() %>% 
+  mutate(variable = "severe")
+
+
+predicted_plot <- rbind(extracted_control, extracted_emotional, extracted_less, extracted_severe)
+
+```
+
+```{r predicted probs plot, fig.width=11, fig.height=8}
+
+
+variables_labs <- c("Controlling behaviors", 
+                    "Emotional violence", 
+                    "Less severe violence",
+                    "Severe violence")
+
+names(variables_labs) <- c("control", 
+                           "emotional",
+                           "less_severe",
+                           "severe")
+
+predicted_plot %>% 
+  ggplot(aes(x, predicted)) + 
+  geom_point(aes(color = group),
+             position = position_dodge(width = 0.2)) +
+  geom_errorbar(aes(ymin = conf.low, 
+                    ymax = conf.high, 
+                    color = group), 
+                width = .1,
+                position = position_dodge(width = 0.2)) +
+  facet_wrap(~ variable,
+             scales = "free",
+             labeller = labeller(variable = variables_labs)) + 
+  theme_minimal() +
+  labs(title = "Predicted probabilities of experiencing intimate partner violence  \n \n",
+       x = "\n Female breadwinners", 
+       y = "Predicted probability \n \n",
+       color = "Traditional gender attitudes score") +
+  scale_color_discrete(labels = c("Lowest 90%", 
+                                  "Highest 10%")) +
+  theme(legend.position = "bottom",
+        plot.title = element_text(hjust = 0.5))
+
+```
+
+
+# Apendices 
+
+```{r appendix_control, results='asis'}
+
+# Appendix
+# Controlling behaviors, full table 
+
+stargazer(m_control_res,
+          m_control_res_rel,
+          m_control_cul,
+          m_control_gen, 
+          coef = list(c_control_res, 
+                      c_control_res_rel,
+                      c_control_cul,
+                      c_control_gen), 
+          ci = T, 
+          ci.custom = list(ci_control_res, 
+                           ci_control_res_rel, 
+                           ci_control_cul,
+                           ci_control_gen),
+          p= c(p_control_res, 
+               p_control_res_rel,
+               p_control_cul,
+               p_control_gen),
+          star.cutoffs = c(0.05, 0.01, 0.001),
+          order = c("interactionFemale BW Traditional GA",
+                    "interactionNo Female BW no Traditional GA",
+                    "interactionNo Female BW Traditional GA",
+                    "rel_income1",
+                    "index_dummy"),
+                    covariate.labels = c("FBW and traditional",
+                               "Non-FBW and non-TGA",
+                               "Non-FBW and TGA",
+                               "Traditional GA",
+                               "Female bread-winner", 
+                               "Education: primary (W)",
+                               "Education: secondary (W)",
+                               "Education: higher (W)",
+                               "Education: primary (M)",
+                               "Education: secondary (M)",
+                               "Education: higher (M)",
+                               "Age (W)","Number of children (W)",
+                               "Afro-Colombian", 
+                               "Indigenous",
+                               "Other ethnic minorities",
+                               "Rural households",
+                               "Constant"),
+          no.space = T,
+          column.sep.width = "4pt",
+          dep.var.labels = c("Controlling behaviors (12m)"),
+          single.row = F, 
+          header = F, 
+          font.size = "small",
+          title = "Results from logistic regression models\\\\Odds ratios of experiencing controlling behaviors in last 12 months.",
+          notes = c(
+              "FBW = Female bread-winner. TGA = Traditional gender attitudes",
+              "The reference category for ethnicity is composed of all inviduals not belonging",
+              "to an ethnic minority. The female bread-winners reference category are all women who do not",
+              "earn more money than their partner, while the reference for the education variables are individuals",
+              "with no education or less than complete primary. The interaction term takes as reference the",
+              "category ´FBW and non-TGA´"),
+          notes.align = "l")
+```
+
+```{r appendix_emotional, results='asis'}
+# Appendix
+# Emotional violence , full table 
+
+stargazer(m_emo_res,
+          m_emo_res_rel,
+          m_emo_cul,
+          m_emo_gen, 
+          coef = list(c_emo_res, 
+                      c_emo_res_rel,
+                      c_emo_cul,
+                      c_emo_gen), 
+          ci = T, 
+          ci.custom = list(ci_emo_res, 
+                           ci_emo_res_rel, 
+                           ci_emo_cul,
+                           ci_emo_gen),
+          p= c(p_emo_res, 
+               p_emo_res_rel,
+               p_emo_cul,
+               p_emo_gen),
+          star.cutoffs = c(0.05, 0.01, 0.001),
+          order = c("interactionFemale BW Traditional GA",
+                    "interactionNo Female BW no Traditional GA",
+                    "interactionNo Female BW Traditional GA",
+                    "rel_income1",
+                    "index_dummy"),
+                    covariate.labels = c("FBW and traditional",
+                               "Non-FBW and non-TGA",
+                               "Non-FBW and TGA",
+                               "Traditional GA",
+                               "Female bread-winner", 
+                               "Education: primary (W)",
+                               "Education: secondary (W)",
+                               "Education: higher (W)",
+                               "Education: primary (M)",
+                               "Education: secondary (M)",
+                               "Education: higher (M)",
+                               "Age (W)",
+                               "Number of children (W)",
+                               "Afro-Colombian", 
+                               "Indigenous",
+                               "Other ethnic minorities",
+                               "Rural households",
+                               "Constant"),
+          no.space = T,
+          column.sep.width = "4pt",
+          dep.var.labels = c("Emotional Violence (12m)"),
+          single.row = F, 
+          header = F, 
+          font.size = "small",
+          title = "Results from logistic regression models\\\\Odds ratios of experiencing emotional violence in last 12 months.",
+          notes = c(
+              "FBW = Female bread-winner. TGA = Traditional gender attitudes",
+              "The reference category for ethnicity is composed of all inviduals not belonging",
+              "to an ethnic minority. The female bread-winners reference category are all women who do not",
+              "earn more money than their partner, while the reference for the education variables are individuals",
+              "with no education or less than complete primary. The interaction term takes as reference the",
+              "category ´FBW and non-TGA´"),
+          notes.align = "l")
+```
+
+```{r appendix_lesssevere, results='asis'}
+
+#Appendeix less severe violence 
+stargazer(m_lesssev_res,
+          m_lesssev_res_rel,
+          m_lesssev_cul,
+          m_lesssev_gen, 
+          coef = list(c_lesssev_res, 
+                      c_lesssev_res_rel,
+                      c_lesssev_cul, 
+                      c_lesssev_gen), 
+          ci = T, 
+          ci.custom = list(ci_lesssev_res, 
+                           ci_lesssev_res_rel,   
+                           ci_lesssev_cul,
+                           ci_lesssev_gen),
+          p = c(p_lesssev_res, 
+               p_lesssev_res_rel,
+               p_lesssev_cul, 
+               p_lesssev_gen), 
+          star.cutoffs = c(0.05, 0.01, 0.001),
+          order = c("interactionFemale BW Traditional GA",
+                    "interactionNo Female BW no Traditional GA",
+                    "interactionNo Female BW Traditional GA",
+                    "rel_income1",
+                    "index_dummy"),
+                    covariate.labels = c("FBW and traditional",
+                               "Non-FBW and non-TGA",
+                               "Non-FBW and TGA",
+                               "Traditional GA",
+                               "Female bread-winner", 
+                               "Education: primary (W)",
+                               "Education: secondary (W)",
+                               "Education: higher (W)",
+                               "Education: primary (M)",
+                               "Education: secondary (M)",
+                               "Education: higher (M)",
+                               "Age (W)",
+                               "Number of children (W)",
+                               "Afro-Colombian", 
+                               "Indigenous",
+                               "Other ethnic minorities",
+                               "Rural households",
+                               "Constant"),
+          column.sep.width = "4pt",
+          dep.var.labels = c("Less severe violence (12m)"),
+          single.row = F, 
+          no.space = T,
+          header = F, 
+          font.size = "small",
+          title = "Results from logistic regression models\\\\Odds ratios of experiencing less severe vioence in last 12 months.",
+          notes = c(
+              "FBW = Female bread-winner. TGA = Traditional gender attitudes",
+              "The reference category for ethnicity is composed of all inviduals not belonging",
+              "to an ethnic minority. The female bread-winners reference category are all women who do not",
+              "earn more money than their partner, while the reference for the education variables are individuals",
+              "with no education or less than complete primary. The interaction term takes as reference the",
+              "category ´FBW and non-TGA´"),
+          notes.align = "l")
+```
+
+```{r appendix_severe, results='asis'}
+#Appendix severe violence 
+
+
+stargazer(m_severe_res,
+          m_severe_res_rel,
+          m_severe_cul,
+          m_severe_gen, 
+          coef = list(c_severe_res, 
+                      c_severe_res_rel,
+                      c_severe_cul,
+                      c_severe_gen), 
+          ci = T, 
+          ci.custom = list(ci_severe_res, 
+                           ci_severe_res_rel,  
+                           ci_severe_cul,
+                           ci_severe_gen),
+          p= c(p_severe_res, 
+               p_severe_res_rel,
+               p_severe_cul,
+               p_severe_gen), 
+          star.cutoffs = c(0.05, 0.01, 0.001),
+           order = c("interactionFemale BW Traditional GA",
+                    "interactionNo Female BW no Traditional GA",
+                    "interactionNo Female BW Traditional GA",
+                    "rel_income1",
+                    "index_dummy",
+                    "factor_edulev_f2-primary",
+                    "factor_edulev_f3-secondary",
+                    "factor_edulev_f4-higher",
+                    "factor_edulev_m2-primary",
+                    "factor_edulev_m3-secondary",
+                    "factor_edulev_m4-higher",
+                    "age_f",
+                    "children_nr",
+                    "ethnicityAfro-colombian",
+                    "ethnicityOther minorities",
+                    "placerural"),
+                    covariate.labels = c("FBW and traditional",
+                               "Non-FBW and non-TGA",
+                               "Non-FBW and TGA",
+                               "Traditional GA",
+                               "Female bread-winner", 
+                               "Education: primary (W)",
+                               "Education: secondary (W)",
+                               "Education: higher (W)",
+                               "Education: primary (M)",
+                               "Education: secondary (M)",
+                               "Education: higher (M)",
+                               "Age (W)",
+                               "Number of children (W)",
+                               "Afro-Colombian", 
+                               "Indigenous",
+                               "Other ethnic minorities", 
+                               "Rural households",
+                               "Constant"),
+          no.space = T,
+          column.sep.width = "4pt",
+          dep.var.labels = c("Less severe violence (12m)"),
+          single.row = F, 
+          header = F, 
+          font.size = "small",
+          title = "Results from logistic regression models\\\\Odds ratios of experiencing severe vioence in last 12 months.",
+          notes = c(
+              "FBW = Female bread-winner. TGA = Traditional gender attitudes",
+              "The reference category for ethnicity is composed of all inviduals not belonging",
+              "to an ethnic minority. The female bread-winners reference category are all women who do not",
+              "earn more money than their partner, while the reference for the education variables are individuals",
+              "with no education or less than complete primary. The interaction term takes as reference the",
+              "category ´FBW and non-TGA´"),
+          notes.align = "l")
+```
+
+
